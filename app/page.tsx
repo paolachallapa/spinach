@@ -7,8 +7,10 @@ import Reportes from '@/components/Reportes'
 import Gestion from '@/components/Gestion'
 import Gastos from '@/components/Gastos/Gastos'
 import Balance from '@/components/Balance'
-import Personal from '@/components/Personal' // NUEVA IMPORTACIÓN
+import Personal from '@/components/Personal'
 import LoginPage from './login/page'
+// IMPORTAMOS EL NUEVO MODAL
+import ModalPassword from '@/components/ui/ModalPassword'
 
 export default function Home() {
   const [vista, setVista] = useState('menu')
@@ -20,6 +22,9 @@ export default function Home() {
   const [perfil, setPerfil] = useState<any>(null)
   const [cargando, setCargando] = useState(true)
 
+  // NUEVO ESTADO PARA EL MODAL
+  const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false)
+
   const cargarDatos = async () => {
     const { data: p } = await supabase.from('productos').select('*').order('nombre')
     const { data: v } = await supabase.from('ventas').select('*').order('creado_at', { ascending: false })
@@ -30,14 +35,19 @@ export default function Home() {
     if (g) setGastos([...g])
   }
 
-  const cambiarPassword = async () => {
-    const nuevaClave = prompt("Ingresa tu nueva contraseña (mínimo 6 caracteres):")
-    if (nuevaClave && nuevaClave.length >= 6) {
-      const { error } = await supabase.auth.updateUser({ password: nuevaClave })
-      if (error) alert("Error: " + error.message)
-      else alert("¡Contraseña actualizada correctamente!")
-    } else if (nuevaClave) {
-      alert("La contraseña debe tener al menos 6 caracteres.")
+  // FUNCIÓN ACTUALIZADA PARA ABRIR EL MODAL
+  const cambiarPassword = () => {
+    setModalPasswordAbierto(true)
+  }
+
+  // FUNCIÓN PARA PROCESAR EL CAMBIO REAL EN SUPABASE
+  const confirmarCambioClave = async (nuevaClave: string) => {
+    const { error } = await supabase.auth.updateUser({ password: nuevaClave })
+    if (error) {
+      alert("Error: " + error.message)
+    } else {
+      alert("¡Contraseña actualizada correctamente!")
+      setModalPasswordAbierto(false)
     }
   }
 
@@ -90,28 +100,35 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 font-sans">
+      {/* COMPONENTE MODAL DE CLAVE */}
+      <ModalPassword 
+        isOpen={modalPasswordAbierto}
+        onClose={() => setModalPasswordAbierto(false)}
+        onConfirm={confirmarCambioClave}
+      />
+
       <header className="bg-white shadow-md mb-4 sticky top-0 z-50 print:hidden text-center p-4">
         <div className="flex justify-between items-center max-w-5xl mx-auto mb-2">
-           <h1 className="text-xl font-black text-orange-600 uppercase tracking-tighter">SPINACH 🍱</h1>
-           
-           <div className="flex items-center gap-3">
-             <div className="text-right hidden md:block">
-               <p className="text-[9px] font-black text-gray-400 uppercase leading-none">{perfil?.nombre || 'Usuario'}</p>
-               <p className="text-[10px] font-bold text-green-600 uppercase leading-tight">{perfil?.rol || 'Personal'}</p>
-               <button 
-                 onClick={cambiarPassword}
-                 className="text-[8px] font-black text-blue-500 uppercase hover:underline block ml-auto"
-               >
-                 Cambiar Clave 🔑
-               </button>
-             </div>
-             <button 
-               onClick={cerrarSesion}
-               className="px-3 py-1 rounded-full text-[9px] font-black uppercase border-2 border-red-100 text-red-500 hover:bg-red-50 transition-all"
-             >
-               Salir 🚪
-             </button>
-           </div>
+            <h1 className="text-xl font-black text-orange-600 uppercase tracking-tighter">SPINACH 🍱</h1>
+            
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden md:block">
+                <p className="text-[9px] font-black text-gray-400 uppercase leading-none">{perfil?.nombre || 'Usuario'}</p>
+                <p className="text-[10px] font-bold text-green-600 uppercase leading-tight">{perfil?.rol || 'Personal'}</p>
+                <button 
+                  onClick={cambiarPassword}
+                  className="text-[8px] font-black text-blue-500 uppercase hover:underline block ml-auto"
+                >
+                  Cambiar Clave 🔑
+                </button>
+              </div>
+              <button 
+                onClick={cerrarSesion}
+                className="px-3 py-1 rounded-full text-[9px] font-black uppercase border-2 border-red-100 text-red-500 hover:bg-red-50 transition-all"
+              >
+                Salir 🚪
+              </button>
+            </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-2 justify-start md:justify-center no-scrollbar">
@@ -127,10 +144,8 @@ export default function Home() {
           <button onClick={() => setVista('reporte')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'reporte' ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>Cierre 🖨️</button>
           <button onClick={() => setVista('historial')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'historial' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>Tickets 🕒</button>
           
-          {/* BOTÓN DE GESTIÓN: Visible para todos los que tengan acceso a la función Gestión */}
           <button onClick={() => setVista('admin')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'admin' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-500'}`}>Gestión ⚙️</button>
 
-          {/* BOTÓN DE PERSONAL: SOLO PARA ADMIN */}
           {perfil?.rol === 'admin' && (
             <button onClick={() => setVista('personal')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'personal' ? 'bg-indigo-700 text-white' : 'bg-gray-100 text-gray-500'}`}>Personal 👤</button>
           )}

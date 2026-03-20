@@ -2,7 +2,7 @@
 import { useState } from 'react' 
 import { printer } from '@/lib/printer'
 import { estilos, BotonAccionmenu } from './UI'
-import { ModalImprimir } from './ModalImprimir'
+import { ModalImprimir } from '@/components/ui/ModalImprimir'
 import { useMenuLogic } from '@/hooks/useMenuLogic'
 
 export default function Menu({ productos, ventas, alTerminar }: any) {
@@ -21,8 +21,9 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
 
   // Filtros rápidos
   const productosBase = productos?.filter((p: any) => p.activo && !p.archivado) || [];
-  const principales = productosBase.filter((p: any) => !p.es_a_la_carta);
+  const principales = productosBase.filter((p: any) => !p.es_a_la_carta && !p.es_extra);
   const aLaCarta = productosBase.filter((p: any) => p.es_a_la_carta);
+  const extras = productosBase.filter((p: any) => p.es_extra);
 
   const hoyCeroHoras = new Date();
   hoyCeroHoras.setHours(0, 0, 0, 0);
@@ -86,12 +87,31 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
               </select>
             </div>
           )}
+
+          {/* SECCIÓN EXTRAS (AÑADIDA ABAJO) */}
+          {extras.length > 0 && (
+            <div className="mt-4 p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
+              <p className="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest ml-2">Extras / Adicionales</p>
+              <select className="w-full p-4 bg-blue-50 border-2 border-blue-200 rounded-2xl font-bold text-xs text-blue-600 outline-none focus:border-blue-500 transition-all"
+                onChange={(e) => {
+                  const extra = extras.find((p: any) => p.id === e.target.value);
+                  if (extra) { gestionarCarrito(extra, 'sumar'); e.target.value = ""; }
+                }}>
+                <option value="">Selecciona un extra...</option>
+                {extras.map((p: any) => (
+                  <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                    {p.nombre.toUpperCase()} - Bs {p.precio} {p.stock <= 0 ? '(AGOTADO)' : `(Stock: ${p.stock})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* SECCIÓN COMANDA */}
         <div className="w-full lg:w-96">
           <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border-t-8 border-orange-500 sticky top-6">
-            <input placeholder="MESA / CLIENTE" value={cliente} onChange={e => setCliente(e.target.value)} className={estilos.input + " mb-2 uppercase"} />
+            <input placeholder="MESA" value={cliente} onChange={e => setCliente(e.target.value)} className={estilos.input + " mb-2 uppercase"} />
             <textarea placeholder="NOTAS DEL PEDIDO" value={notas} onChange={e => setNotas(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl mb-4 font-bold text-[11px] h-20 outline-none resize-none" />
             
             <div className="space-y-2 mb-4 max-h-60 overflow-auto pr-1">

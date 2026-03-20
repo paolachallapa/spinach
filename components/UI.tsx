@@ -80,3 +80,13 @@ export const estilosTicket = `
 `;
 
 
+export const uiStyles = {
+  container: "space-y-8 pb-20 max-w-4xl mx-auto",
+  productCard: (activo: boolean) => `
+    flex flex-col md:flex-row justify-between items-center p-4 rounded-xl border 
+    transition-all duration-75 gap-4 
+    ${activo ? 'bg-gray-50 border-gray-100' : 'bg-gray-200 border-gray-300 opacity-60'}
+  `,
+  badgeStock: "text-[9px] font-black px-2 py-0.5 rounded bg-white shadow-sm text-purple-600 uppercase",
+  badgePrecio: "text-[9px] font-black px-2 py-0.5 rounded bg-white shadow-sm text-green-600 uppercase",
+};
