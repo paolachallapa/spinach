@@ -29,7 +29,7 @@ export const printer = {
           </div>
           <div class="linea"></div>
           
-          <div style="font-size: 20px"><b>C/MESA:</b> ${nom.toUpperCase()}</div>
+          <div style="font-size: 25px"><b>C/MESA:</b> ${nom.toUpperCase()}</div>
           
           ${horaVenta ? `
             <div style="font-size: 13px; margin-top: 2px;">
@@ -40,7 +40,7 @@ export const printer = {
           <div class="linea"></div>
           
           ${items.map(i => `
-            <div class="item" style="font-size: 20px">
+            <div class="item" style="font-size: 25px">
               <span>${i.cantidad}x ${i.nombre}</span> 
               <span>Bs${(i.precio * i.cantidad).toFixed(2)}</span>
             </div>
@@ -64,7 +64,7 @@ export const printer = {
           </div>
 
           <div style="margin-top: 15px; display: flex; justify-content: flex-start;">
-            <div style="font-size: 18px; font-weight: 900; border: 2px solid black; padding: 4px 8px; text-transform: uppercase;">
+            <div style="font-size: 25px; font-weight: 900; border: 2px solid black; padding: 4px 8px; text-transform: uppercase;">
               ${nro ? nro : 'ORDEN: #--'}
             </div>
           </div>

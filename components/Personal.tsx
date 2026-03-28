@@ -2,13 +2,28 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { estilos } from './UI'
+// IMPORTANTE: Importamos createClient para crear el cliente silencioso
+import { createClient } from '@supabase/supabase-js'
 
 export default function Personal() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
-  // Cambiamos el rol inicial a 'cajero_auxiliar'
   const [nuevoUsuario, setNuevoUsuario] = useState({ 
     email: '', password: '', nombre: '', apellido: '', rol: 'cajero_auxiliar' 
   });
+
+  // Creamos un cliente que NO guarda sesión en el navegador (PersistSession: false)
+  // Esto evita que al crear un usuario se cierre tu sesión de Admin
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    }
+  )
 
   const cargarUsuarios = async () => {
     const { data } = await supabase.from('perfiles').select('*').order('nombre');
@@ -19,20 +34,27 @@ export default function Personal() {
 
   const crearUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.signUp({
+    
+    // USAMOS supabaseAdmin en lugar del supabase normal
+    const { error } = await supabaseAdmin.auth.signUp({
       email: nuevoUsuario.email,
       password: nuevoUsuario.password,
       options: {
-        data: { nombre: nuevoUsuario.nombre, apellido: nuevoUsuario.apellido, rol: nuevoUsuario.rol }
+        data: { 
+          nombre: nuevoUsuario.nombre, 
+          apellido: nuevoUsuario.apellido, 
+          rol: nuevoUsuario.rol 
+        }
       }
     });
 
     if (error) return alert("Error: " + error.message);
     
-    alert("¡Personal registrado con éxito!");
-    // Limpiamos con el rol por defecto
+    alert("¡Personal registrado con éxito! Ya puede iniciar sesión en su dispositivo.");
+    
     setNuevoUsuario({ email: '', password: '', nombre: '', apellido: '', rol: 'cajero_auxiliar' });
     
+    // Recargamos la lista con el cliente normal para ver al nuevo integrante
     setTimeout(() => {
       cargarUsuarios();
     }, 1500);
@@ -58,7 +80,6 @@ export default function Personal() {
             <div key={u.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
               <div>
                 <p className="font-black text-gray-800 uppercase text-xs">{u.nombre} {u.apellido}</p>
-                {/* Estilo dinámico según el rol */}
                 <p className={`text-[9px] font-bold uppercase ${
                   u.rol === 'subadmin' ? 'text-purple-600' : 
                   u.rol === 'cajero' ? 'text-blue-500' : 'text-green-600'
@@ -91,7 +112,6 @@ export default function Personal() {
           <input type="email" placeholder="EMAIL DE ACCESO" value={nuevoUsuario.email} onChange={e => setNuevoUsuario({...nuevoUsuario, email: e.target.value})} className={estilos.input} required />
           <input type="password" placeholder="CONTRASEÑA INICIAL" value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} className={estilos.input} required />
           
-          {/* Selector con el nuevo rol */}
           <select value={nuevoUsuario.rol} onChange={e => setNuevoUsuario({...nuevoUsuario, rol: e.target.value})} className={estilos.input}>
             <option value="cajero_auxiliar">CAJERO AUXILIAR</option>
             <option value="cajero">CAJERO</option>

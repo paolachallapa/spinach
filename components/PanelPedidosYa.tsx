@@ -12,8 +12,7 @@ export default function PanelPedidosYa({ ventas, alTerminar }: any) {
     return fechaLocal === hoy && v.metodo_pago === 'pya';
   }) || [];
 
-  // 2. AGRUPAMOS: Usamos la misma lógica que en Tickets para que la impresión sea idéntica
-  const pedidosAgrupados = ventasPYA.reduce((acc: any, v: any) => {
+ const pedidosAgrupados = ventasPYA.reduce((acc: any, v: any) => {
     const pedidoKey = v.creado_at; 
     
     if (!acc[pedidoKey]) {
