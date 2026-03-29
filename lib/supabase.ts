@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://lpsjyinzvxctyamxzkdv.supabase.co'
+const supabaseUrl = 'https://qgrcsrvbmtudcwwnkjsn.supabase.co'
 // Pega aquí tu clave Anon Key real entre las comillas
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxwc2p5aW56dnhjdHlhbXh6a2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MzAzOTcsImV4cCI6MjA4NjEwNjM5N30.-nW3nfluS-tej0gego_zpYE3K1h5-h5VR9vQ9HAsmHk' 
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncmNzcnZibXR1ZGN3d25ranNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3NDA5NTEsImV4cCI6MjA5MDMxNjk1MX0.1-cjBKsMg4sTlA6WI9nPdWpHVWZZ9J1iK0QOIsa-A7ceyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncmNzcnZibXR1ZGN3d25ranNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3NDA5NTEsImV4cCI6MjA5MDMxNjk1MX0.1-cjBKsMg4sTlA6WI9nPdWpHVWZZ9J1iK0QOIsa-A7c' 
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
