@@ -29,16 +29,43 @@ export const useMenuLogic = (alTerminar: any) => {
     }
   };
 
-  // --- CAMBIO: Ahora handleConfirmar recibe el método de pago ---
-  const handleConfirmar = async (metodo: string) => {
-    if (!cliente.trim() || carrito.length === 0) return alert("Datos incompletos");
+  /**
+   * PASO 1: Solo abre el modal y prepara los datos.
+   * NO guarda en la base de datos aún.
+   */
+  const solicitarConfirmacion = (metodo: string) => {
+    if (!cliente.trim() || carrito.length === 0) {
+      return alert("Por favor, ingresa la MESA y agrega productos.");
+    }
+    
     const totalPedido = carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0);
     
+    setDatosParaImprimir({
+      cliente: cliente,
+      carrito: [...carrito],
+      total: totalPedido,
+      notas: notas,
+      metodo: metodo
+    });
+
+    setShowModal(true);
+  };
+
+  /**
+   * PASO 2: Realiza el registro real en Supabase.
+   * Se ejecuta solo al dar "SÍ" en el modal.
+   */
+  const ejecutarRegistroDB = async () => {
     try {
-      // Enviamos cliente, carrito, notas y el nuevo parámetro metodo
-      const { error } = await api.registrarPedido(cliente, carrito, notas, metodo);
+      const { error } = await api.registrarPedido(
+        datosParaImprimir.cliente, 
+        datosParaImprimir.carrito, 
+        datosParaImprimir.notas, 
+        datosParaImprimir.metodo
+      );
       
       if (!error) {
+        // Obtenemos el número de pedido para el ticket
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const hoyISO = hoy.toISOString();
@@ -50,26 +77,32 @@ export const useMenuLogic = (alTerminar: any) => {
         
         const nroPedido = new Set(vHoy?.map(v => v.creado_at)).size;
         
-        setDatosParaImprimir({
-          cliente: cliente,
-          carrito: [...carrito],
-          total: totalPedido,
-          notas: notas,
-          metodo: metodo, // Guardamos el método para el ticket si lo necesitas
-          nro: `#${nroPedido}`
-        });
-
-        setShowModal(true); 
+        return { ...datosParaImprimir, nro: `#${nroPedido}` };
       } else { 
-        alert("Error al registrar"); 
+        alert("Error al guardar en base de datos"); 
+        return null;
       }
     } catch (err) { 
       console.error(err);
       alert("Error de conexión"); 
+      return null;
     }
   };
 
-  const finalizarTodo = () => {
+  /**
+   * FUNCIÓN PARA LA "X": 
+   * Solo cierra el modal. La venta NO se registra.
+   */
+  const cerrarSinRegistrar = () => {
+    setShowModal(false);
+    setDatosParaImprimir(null);
+  };
+
+  /**
+   * LIMPIEZA FINAL:
+   * Se ejecuta después de un registro exitoso.
+   */
+  const finalizarLimpiarTodo = () => {
     setShowModal(false);
     setCarrito([]); 
     setCliente(''); 
@@ -81,12 +114,13 @@ export const useMenuLogic = (alTerminar: any) => {
   return {
     cliente, setCliente, 
     notas, setNotas, 
-    carrito, setCarrito,
+    carrito, 
     gestionarCarrito, 
-    handleConfirmar, 
+    solicitarConfirmacion, // Usar este en lugar de handleConfirmar
+    ejecutarRegistroDB,     // Usar este dentro del "SÍ" del modal
     showModal, 
-    setShowModal,
     datosParaImprimir, 
-    finalizarTodo
+    finalizarLimpiarTodo,
+    cerrarSinRegistrar 
   };
 };
