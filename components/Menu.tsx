@@ -6,51 +6,64 @@ import { ModalImprimir } from '@/components/ui/ModalImprimir'
 import { useMenuLogic } from '@/hooks/useMenuLogic'
 
 export default function Menu({ productos, ventas, alTerminar }: any) {
+  // Extraemos las nuevas funciones del Hook
   const {
     cliente, setCliente, notas, setNotas, carrito,
-    gestionarCarrito, handleConfirmar, showModal, 
-    datosParaImprimir, finalizarTodo
+    gestionarCarrito, solicitarConfirmacion, ejecutarRegistroDB, 
+    showModal, datosParaImprimir, finalizarLimpiarTodo, cerrarSinRegistrar
   } = useMenuLogic(alTerminar);
 
-  // --- ESTADOS PARA MÉTODOS DE PAGO ---
   const [metodoPago, setMetodoPago] = useState<'qr' | 'ef' | 'pya'>('ef');
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
 
   const totalVenta = carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0);
   const cambio = montoRecibido > totalVenta ? (montoRecibido - totalVenta).toFixed(2) : "0.00";
 
-  // Filtros rápidos
+  // Lógica de filtrado de productos
   const productosBase = productos?.filter((p: any) => p.activo && !p.archivado) || [];
   const principales = productosBase.filter((p: any) => !p.es_a_la_carta && !p.es_extra);
   const aLaCarta = productosBase.filter((p: any) => p.es_a_la_carta);
   const extras = productosBase.filter((p: any) => p.es_extra);
 
+  // Cálculo de caja chica del día
   const hoyCeroHoras = new Date();
   hoyCeroHoras.setHours(0, 0, 0, 0);
-
   const totalCajaHoy = ventas?.filter((v: any) => {
     const fechaVenta = new Date(v.creado_at);
     return fechaVenta >= hoyCeroHoras;
   })
   .reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0) || 0;
 
-  // --- FUNCIÓN ACTUALIZADA ---
-  const confirmarImpresion = () => {
-    if (datosParaImprimir) {
+  /**
+   * Esta función se dispara cuando el usuario da "SÍ" en el modal.
+   * Primero guarda en la DB y, si tiene éxito, imprime el ticket.
+   */
+  const manejarGuardadoEImpresion = async () => {
+    const datosFinales = await ejecutarRegistroDB();
+    
+    if (datosFinales) {
+      // Solo si se guardó correctamente en Supabase, procedemos a imprimir
       printer.imprimirTicket(
-        datosParaImprimir.cliente, datosParaImprimir.carrito, 
-        datosParaImprimir.total, datosParaImprimir.notas, datosParaImprimir.nro, datosParaImprimir.metodo
+        datosFinales.cliente, 
+        datosFinales.carrito, 
+        datosFinales.total, 
+        datosFinales.notas, 
+        datosFinales.nro, 
+        datosFinales.metodo
       );
+      
+      // Limpiamos los estados locales
+      setMontoRecibido(0);
+      setMetodoPago('ef');
+      finalizarLimpiarTodo();
     }
-    finalizarTodo();
-    setMontoRecibido(0); // Limpiar calculadora
-    setMetodoPago('ef'); // Reset a efectivo por defecto
   };
 
   return (
     <>
       <div className="flex flex-col lg:flex-row gap-6 w-full animate-in fade-in duration-500">
-        {/* SECCIÓN PRODUCTOS */}
+        
+        {/* IZQUIERDA: LISTA DE PRODUCTOS */}
         <div className="flex-1 space-y-4">
           <div className="bg-green-600 p-6 rounded-3xl text-center text-white shadow-lg">
             <p className="text-4xl font-black italic">Bs {totalCajaHoy.toFixed(2)}</p>
@@ -70,50 +83,48 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
             ))}
           </div>
 
-          {aLaCarta.length > 0 && (
-            <div className="mt-6 p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
-              <p className="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest ml-2">Platos a la Carta</p>
-              <select className="w-full p-4 bg-orange-50 border-2 border-orange-200 rounded-2xl font-bold text-xs text-orange-600 outline-none focus:border-orange-500 transition-all"
-                onChange={(e) => {
-                  const plato = aLaCarta.find((p: any) => p.id === e.target.value);
-                  if (plato) { gestionarCarrito(plato, 'sumar'); e.target.value = ""; }
-                }}>
-                <option value="">Selecciona un adicional...</option>
-                {aLaCarta.map((p: any) => (
-                  <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                    {p.nombre.toUpperCase()} - Bs {p.precio} {p.stock <= 0 ? '(AGOTADO)' : `(Stock: ${p.stock})`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* SECCIÓN EXTRAS (AÑADIDA ABAJO) */}
-          {extras.length > 0 && (
-            <div className="mt-4 p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
-              <p className="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest ml-2">Extras / Adicionales</p>
-              <select className="w-full p-4 bg-blue-50 border-2 border-blue-200 rounded-2xl font-bold text-xs text-blue-600 outline-none focus:border-blue-500 transition-all"
-                onChange={(e) => {
-                  const extra = extras.find((p: any) => p.id === e.target.value);
-                  if (extra) { gestionarCarrito(extra, 'sumar'); e.target.value = ""; }
-                }}>
-                <option value="">Selecciona un extra...</option>
-                {extras.map((p: any) => (
-                  <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                    {p.nombre.toUpperCase()} - Bs {p.precio} {p.stock <= 0 ? '(AGOTADO)' : `(Stock: ${p.stock})`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* SELECTS PARA A LA CARTA Y EXTRAS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {aLaCarta.length > 0 && (
+                <div className="p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
+                  <p className="text-[10px] font-black text-gray-400 mb-2 uppercase">Platos a la Carta</p>
+                  <select className="w-full p-4 bg-orange-50 border-2 border-orange-200 rounded-2xl font-bold text-xs"
+                    onChange={(e) => {
+                      const p = aLaCarta.find((x: any) => x.id === e.target.value);
+                      if (p) { gestionarCarrito(p, 'sumar'); e.target.value = ""; }
+                    }}>
+                    <option value="">Seleccionar...</option>
+                    {aLaCarta.map((p: any) => (
+                      <option key={p.id} value={p.id} disabled={p.stock <= 0}>{p.nombre} - Bs {p.precio}</option>
+                    ))}
+                  </select>
+                </div>
+             )}
+             {extras.length > 0 && (
+                <div className="p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
+                  <p className="text-[10px] font-black text-gray-400 mb-2 uppercase">Extras</p>
+                  <select className="w-full p-4 bg-blue-50 border-2 border-blue-200 rounded-2xl font-bold text-xs"
+                    onChange={(e) => {
+                      const p = extras.find((x: any) => x.id === e.target.value);
+                      if (p) { gestionarCarrito(p, 'sumar'); e.target.value = ""; }
+                    }}>
+                    <option value="">Seleccionar...</option>
+                    {extras.map((p: any) => (
+                      <option key={p.id} value={p.id} disabled={p.stock <= 0}>{p.nombre} - Bs {p.precio}</option>
+                    ))}
+                  </select>
+                </div>
+             )}
+          </div>
         </div>
 
-        {/* SECCIÓN COMANDA */}
+        {/* DERECHA: PANEL DE COMANDA */}
         <div className="w-full lg:w-96">
           <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border-t-8 border-orange-500 sticky top-6">
-            <input placeholder="MESA" value={cliente} onChange={e => setCliente(e.target.value)} className={estilos.input + " mb-2 uppercase"} />
-            <textarea placeholder="NOTAS DEL PEDIDO" value={notas} onChange={e => setNotas(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl mb-4 font-bold text-[11px] h-20 outline-none resize-none" />
+            <input placeholder="MESA / CLIENTE" value={cliente} onChange={e => setCliente(e.target.value)} className={estilos.input + " mb-2 uppercase"} />
+            <textarea placeholder="NOTAS..." value={notas} onChange={e => setNotas(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl mb-4 font-bold text-[11px] h-20 outline-none resize-none" />
             
+            {/* LISTA CARRITO */}
             <div className="space-y-2 mb-4 max-h-60 overflow-auto pr-1">
               {carrito.map(item => (
                 <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100">
@@ -134,17 +145,19 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
               <div className="pt-4 border-t-2 border-dashed border-gray-100">
                 {/* MÉTODOS DE PAGO */}
                 <div className="flex gap-2 mb-4">
-                  <button onClick={() => setMetodoPago('qr')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'qr' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>QR 📱</button>
-                  <button onClick={() => setMetodoPago('ef')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'ef' ? 'bg-green-600 border-green-600 text-white shadow-lg shadow-green-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>EF 💵</button>
-                  <button onClick={() => setMetodoPago('pya')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'pya' ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>PYA 🛵</button>
+                  {['qr', 'ef', 'pya'].map((m: any) => (
+                    <button key={m} onClick={() => setMetodoPago(m)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${metodoPago === m ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                      {m === 'ef' ? 'Efectivo' : m.toUpperCase()}
+                    </button>
+                  ))}
                 </div>
 
-                {/* CALCULADORA EFECTIVO */}
+                {/* CALCULADORA DE CAMBIO */}
                 {metodoPago === 'ef' && (
                   <div className="mb-4 bg-gray-50 p-3 rounded-3xl border border-gray-100 animate-in zoom-in duration-200">
                     <div className="flex gap-2 mb-3">
                       {[20, 50, 100, 200].map(monto => (
-                        <button key={monto} onClick={() => setMontoRecibido(monto)} className="flex-1 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-600 hover:bg-green-50 transition-all">Bs {monto}</button>
+                        <button key={monto} onClick={() => setMontoRecibido(monto)} className="flex-1 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-600 hover:bg-green-50">Bs {monto}</button>
                       ))}
                     </div>
                     <div className="flex justify-between items-center bg-white p-3 rounded-2xl border border-gray-100">
@@ -161,12 +174,11 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
                   <span className="text-3xl font-black text-gray-800 tracking-tighter">Bs {totalVenta.toFixed(2)}</span>
                 </div>
                 
-                {/* BOTÓN CONFIRMAR ACTUALIZADO */}
                 <button 
-                  onClick={() => handleConfirmar(metodoPago)} 
+                  onClick={() => solicitarConfirmacion(metodoPago)} 
                   className="w-full bg-orange-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-xl active:scale-95 transition hover:bg-orange-600"
                 >
-                  CONFIRMAR Y TICKET 🧾
+                  CONFIRMAR REGISTRO 🧾
                 </button>
               </div>
             )}
@@ -174,10 +186,11 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
         </div>
       </div>
 
+      {/* MODAL DE IMPRESIÓN CORREGIDO */}
       <ModalImprimir 
         isOpen={showModal} 
-        onConfirm={confirmarImpresion} 
-        onCancel={finalizarTodo} 
+        onConfirm={manejarGuardadoEImpresion} // Guarda en DB e Imprime
+        onCancel={cerrarSinRegistrar}        // Solo cierra (La "X")
       />
     </>
   )
