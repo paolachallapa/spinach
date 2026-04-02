@@ -96,6 +96,9 @@ export default function Home() {
     return <LoginPage />
   }
 
+  // --- FILTRADO DE VENTAS PARA CÁLCULOS REALES ---
+  const ventasValidas = ventas.filter((v: any) => v.estado !== 'anulado');
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10 font-sans">
       <ModalPassword 
@@ -131,7 +134,6 @@ export default function Home() {
         <div className="flex gap-2 overflow-x-auto pb-2 justify-start md:justify-center no-scrollbar">
           <button onClick={() => setVista('menu')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'menu' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-500'}`}>Vender 💰</button>
           
-          {/* BOTÓN PEDIDOS YA - SOLO ADMIN */}
           {perfil?.rol === 'admin' && (
             <button onClick={() => setVista('pya')} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex-shrink-0 ${vista === 'pya' ? 'bg-red-600 text-white shadow-lg shadow-red-100' : 'bg-gray-100 text-gray-500'}`}>Pedidos Ya 🛵</button>
           )}
@@ -155,12 +157,21 @@ export default function Home() {
       </header>
 
       <main className="max-w-5xl mx-auto px-2">
-        {vista === 'menu' && <Menu productos={productos} ventas={ventas} alTerminar={cargarDatos} />}
-        {vista === 'pya' && perfil?.rol === 'admin' && <PanelPedidosYa ventas={ventas} alTerminar={cargarDatos} />}
+        {/* Usamos ventasValidas para que no sume los anulados en el stock del menú */}
+        {vista === 'menu' && <Menu productos={productos} ventas={ventasValidas} alTerminar={cargarDatos} />}
+        
+        {vista === 'pya' && perfil?.rol === 'admin' && <PanelPedidosYa ventas={ventasValidas} alTerminar={cargarDatos} />}
+        
         {vista === 'gastos' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Gastos gastos={gastos} alTerminar={cargarDatos} />}
-        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventas} gastos={gastos} />}
-        {vista === 'reporte' && <Reportes ventas={ventas} gastos={gastos} />}
-        {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} />}
+        
+        {/* BALANCE Y REPORTES YA NO SUMARÁN LAS VENTAS ANULADAS */}
+        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas} gastos={gastos} />}
+        
+        {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} />}
+        
+        {/* EN EL HISTORIAL PASAMOS TODAS LAS VENTAS PARA PODER VER CUÁLES SE ANULARON */}
+        {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} perfilUsuario={perfil} />}
+        
         {vista === 'admin' && <Gestion productos={productos} alTerminar={cargarDatos} />}
         {vista === 'personal' && perfil?.rol === 'admin' && <Personal />}
       </main>
