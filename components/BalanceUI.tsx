@@ -1,3 +1,7 @@
+'use client'
+import { useState } from 'react'
+
+// --- COMPONENTES VISUALES ---
 export const CardBalance = ({ titulo, monto, color, esSaldo = false }: any) => {
   const bgCulo = esSaldo 
     ? (monto >= 0 ? 'bg-green-600 border-green-800' : 'bg-red-600 border-red-800')
@@ -31,14 +35,12 @@ export const ItemGasto = ({ concepto, fecha, monto }: any) => (
       - Bs {Number(monto).toFixed(2)}
     </span>
   </div>
-  
 );
+
 export const IndicadorRendimiento = ({ ingresos, egresos }: { ingresos: number, egresos: number }) => {
   if (ingresos === 0) return null;
-
   const porcentajeGasto = (egresos / ingresos) * 100;
   const saldo = ingresos - egresos;
-
   let mensaje = "";
   let colorClase = "";
 
@@ -68,3 +70,44 @@ export const IndicadorRendimiento = ({ ingresos, egresos }: { ingresos: number, 
     </div>
   );
 };
+
+// --- COMPONENTE PRINCIPAL ACTUALIZADO ---
+export default function Balance({ ventas, gastos }: any) {
+  // 1. FILTRADO CRÍTICO: Ignoramos las ventas que tengan estado 'anulado'
+  const ventasValidas = ventas.filter((v: any) => v.estado !== 'anulado');
+
+  // 2. CALCULAMOS USANDO SOLO LAS VENTAS VÁLIDAS
+  const totalIngresos = ventasValidas.reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0);
+  const totalEgresos = gastos.reduce((acc: number, g: any) => acc + Number(g.monto), 0);
+  const saldoNeto = totalIngresos - totalEgresos;
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-2">
+        <CardBalance titulo="Ingresos Totales" monto={totalIngresos} color="green" />
+        <CardBalance titulo="Gastos Registrados" monto={totalEgresos} color="red" />
+        <CardBalance titulo="Saldo Neto" monto={saldoNeto} esSaldo={true} />
+      </div>
+
+      <div className="mx-2">
+        <IndicadorRendimiento ingresos={totalIngresos} egresos={totalEgresos} />
+      </div>
+
+      <div className="mx-2 bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
+          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+          Últimos Egresos Detallados
+        </h3>
+        <div className="space-y-3">
+          {gastos.length > 0 ? (
+            gastos.slice(0, 10).map((g: any) => (
+              <ItemGasto key={g.id} concepto={g.concepto} fecha={g.created_at} monto={g.monto} />
+            ))
+          ) : (
+            <p className="text-center text-[10px] font-bold text-gray-300 uppercase py-10">Sin gastos registrados</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
