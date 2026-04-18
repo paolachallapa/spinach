@@ -1,31 +1,31 @@
-// lib/utils/reporteTemplate.ts
-
 export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) => {
   const { listaPrincipales, listaExtras, metodos, totales, fechaFormateada } = data;
 
-  const generarFilas = (items: any[]) => items.map(item => `
-    <tr>
-      <td style="width: 60%;">${item.nombre}</td>
-      <td style="width: 15%; text-align: center;">${item.cantidad}</td>
-      <td style="width: 25%; text-align: right;">Bs ${item.total.toFixed(2)}</td>
-    </tr>
-  `).join('');
+  // Actualizamos la función para incluir el cálculo del precio unitario
+  const generarFilas = (items: any[]) => items.map(item => {
+    const precioUnitario = item.total / item.cantidad;
+    return `
+      <tr>
+        <td style="width: 45%;">${item.nombre}</td>
+        <td style="width: 15%; text-align: center;">${item.cantidad}</td>
+        <td style="width: 20%; text-align: center;">Bs ${precioUnitario.toFixed(2)}</td>
+        <td style="width: 20%; text-align: right;">Bs ${item.total.toFixed(2)}</td>
+      </tr>
+    `;
+  }).join('');
 
   return `
     <html>
       <head>
         <title>Reporte Spinach</title>
         <style>
-          /* ESTA ES LA PARTE CLAVE: 
-             Configura el tamaño de página y oculta encabezados/pies de página del navegador 
-          */
           @page { 
             size: auto; 
-            margin: 0mm; /* El margen 0 ayuda a que el navegador no inserte sus propios datos */
+            margin: 0mm; 
           }
           
           @media print {
-            body { margin: 10mm; } /* Aplicamos el margen al cuerpo, no a la página */
+            body { margin: 10mm; }
           }
 
           html, body { height: 100%; margin: 0; padding: 0; }
@@ -50,8 +50,8 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
           td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; text-transform: uppercase; }
 
           .totales-area { margin-left: auto; width: 220px; margin-top: 10px; }
-          .total-item { display: flex; justify-content: space-between; padding: 2px 0; }
-          .total-final { display: flex; justify-content: space-between; padding: 8px; background: #15803d; color: black; border-radius: 4px; font-weight: bold; font-size: 13px; }
+          .total-item { display: flex; justify-content: space-between; padding: 2px 0; font-size: 15px;}
+          .total-final { display: flex; justify-content: space-between; padding: 8px 0; background: #15803d; color: black; border-radius: 4px; font-weight: bold; font-size: 17px; }
           
           .footer-wrapper { flex-shrink: 0; padding: 20px; width: 100%; box-sizing: border-box; }
           .firma-container { display: flex; justify-content: center; margin-bottom: 15px; }
@@ -80,19 +80,36 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
 
           <div class="section-title">Ventas Principales</div> 
           <table>
-            <thead><tr><th style="width: 60%;">Producto</th><th style="width: 15%; text-align: center;">Cant.</th><th style="width: 25%; text-align: right;">Total</th></tr></thead>
+            <thead>
+              <tr>
+                <th style="width: 45%;">Producto</th>
+                <th style="width: 15%; text-align: center;">Cant.</th>
+                <th style="width: 20%; text-align: center;">P. Unit.</th>
+                <th style="width: 20%; text-align: right;">Total</th>
+              </tr>
+            </thead>
             <tbody>${generarFilas(listaPrincipales)}</tbody> 
           </table>
 
           ${listaExtras.length > 0 ? `
             <div class="section-title">Extras y Adicionales</div>
-            <table><tbody>${generarFilas(listaExtras)}</tbody></table> 
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 45%;">Producto</th>
+                  <th style="width: 15%; text-align: center;">Cant.</th>
+                  <th style="width: 20%; text-align: center;">P. Unit.</th>
+                  <th style="width: 20%; text-align: right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>${generarFilas(listaExtras)}</tbody>
+            </table> 
           ` : ''}
 
           <div class="totales-area">
             <div class="total-item"><span>Ventas Brutas:</span><span>Bs ${totales.totalVentas.toFixed(2)}</span></div> 
             <div class="total-item" style="color: #b91c1c;"><span>Gastos:</span><span>-Bs ${totales.totalGastos.toFixed(2)}</span></div> 
-            <div class="total-final"><span>EFECTIVO NETO:</span><span>Bs ${totales.efectivoNeto.toFixed(2)}</span></div> 
+            <div class="total-final"><span>EFECTIVO NETO:</span><span>Bs${totales.efectivoNeto.toFixed(2)}</span></div> 
           </div>
         </div>
 
