@@ -167,7 +167,7 @@ export default function Home() {
         {/* BALANCE Y REPORTES YA NO SUMARÁN LAS VENTAS ANULADAS */}
         {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas} gastos={gastos} />}
         
-        {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} />}
+        {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} productos={productos} />}
         
         {/* EN EL HISTORIAL PASAMOS TODAS LAS VENTAS PARA PODER VER CUÁLES SE ANULARON */}
         {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} perfilUsuario={perfil} />}
