@@ -5,52 +5,62 @@ import { estilos, BotonAccionmenu } from './UI'
 import { ModalImprimir } from '@/components/ui/ModalImprimir'
 import { useMenuLogic } from '@/hooks/useMenuLogic'
 
-export default function Menu({ productos, ventas, alTerminar }: any) {
-  // Extraemos las nuevas funciones del Hook
+export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: any) {
   const {
     cliente, setCliente, notas, setNotas, carrito,
     gestionarCarrito, solicitarConfirmacion, ejecutarRegistroDB, 
     showModal, datosParaImprimir, finalizarLimpiarTodo, cerrarSinRegistrar
-  } = useMenuLogic(alTerminar);
+  } = useMenuLogic(alTerminar, perfilUsuario);
 
-  const [metodoPago, setMetodoPago] = useState<'qr' | 'ef' | 'pya'>('ef');
+  // ESTADOS ACTUALIZADOS PARA MIX
+  const [metodoPago, setMetodoPago] = useState<'qr' | 'ef' | 'pya' | 'mix'>('ef');
+  const [pagosMix, setPagosMix] = useState({ ef: 0, qr: 0 });
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
 
   const totalVenta = carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0);
-  const cambio = montoRecibido > totalVenta ? (montoRecibido - totalVenta).toFixed(2) : "0.00";
+  
+  // Lógica de cambio adaptada para ambos modos
+  const cambio = metodoPago === 'ef' 
+    ? (montoRecibido > totalVenta ? (montoRecibido - totalVenta).toFixed(2) : "0.00")
+    : (pagosMix.ef > (totalVenta - pagosMix.qr) ? (pagosMix.ef - (totalVenta - pagosMix.qr)).toFixed(2) : "0.00");
 
-  // Lógica de filtrado de productos
   const productosBase = productos?.filter((p: any) => p.activo && !p.archivado) || [];
   const principales = productosBase.filter((p: any) => !p.es_a_la_carta && !p.es_extra);
   const aLaCarta = productosBase.filter((p: any) => p.es_a_la_carta);
   const extras = productosBase.filter((p: any) => p.es_extra);
 
-  // Cálculo de caja chica del día
   const hoyCeroHoras = new Date();
   hoyCeroHoras.setHours(0, 0, 0, 0);
+  
   const totalCajaHoy = ventas?.filter((v: any) => {
     const fechaVenta = new Date(v.creado_at);
-    return fechaVenta >= hoyCeroHoras;
+    return fechaVenta >= hoyCeroHoras && v.estado !== 'anulado';
   })
   .reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0) || 0;
 
-  /**
-   * Ejecuta el registro en DB y si es exitoso, imprime el ticket.
-   */
   const manejarGuardadoEImpresion = async () => {
-    const datosFinales = await ejecutarRegistroDB();
-    
-    if (datosFinales) {
-      printer.imprimirTicket(
-        datosFinales.cliente, 
-        datosFinales.carrito, 
-        datosFinales.total, 
-        datosFinales.notas, 
-        datosFinales.nro, 
-        datosFinales.metodo
-      );
+  // Calculamos los montos según el método elegido
+  const montosParaDB = {
+    pago_ef: metodoPago === 'ef' ? totalVenta : (metodoPago === 'mix' ? pagosMix.ef : 0),
+    pago_qr: metodoPago === 'qr' ? totalVenta : (metodoPago === 'mix' ? pagosMix.qr : 0)
+  };
+
+  // Pasamos los montos a la función del hook
+  const datosFinales = await ejecutarRegistroDB(metodoPago, montosParaDB);
+  
+  if (datosFinales) {
+    printer.imprimirTicket(
+      datosFinales.cliente, 
+      datosFinales.carrito, 
+      datosFinales.total, 
+      datosFinales.notas, 
+      datosFinales.nro, 
+      datosFinales.metodo,
+      metodoPago === 'mix' ? pagosMix : null
+    );
       
       setMontoRecibido(0);
+      setPagosMix({ ef: 0, qr: 0 });
       setMetodoPago('ef');
       finalizarLimpiarTodo();
     }
@@ -59,8 +69,6 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
   return (
     <>
       <div className="flex flex-col lg:flex-row gap-6 w-full animate-in fade-in duration-500">
-        
-        {/* IZQUIERDA: LISTA DE PRODUCTOS */}
         <div className="flex-1 space-y-4">
           <div className="bg-green-600 p-6 rounded-3xl text-center text-white shadow-lg">
             <p className="text-4xl font-black italic">Bs {totalCajaHoy.toFixed(2)}</p>
@@ -80,7 +88,6 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
             ))}
           </div>
 
-          {/* DISEÑO ANTERIOR RESTAURADO: Platos a la Carta */}
           {aLaCarta.length > 0 && (
             <div className="mt-6 p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
               <p className="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest ml-2">Platos a la Carta</p>
@@ -99,7 +106,6 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
             </div>
           )}
 
-          {/* DISEÑO ANTERIOR RESTAURADO: Extras */}
           {extras.length > 0 && (
             <div className="mt-4 p-4 bg-white rounded-3xl border-2 border-dashed border-gray-200">
               <p className="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest ml-2">Extras / Adicionales</p>
@@ -119,7 +125,6 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
           )}
         </div>
 
-        {/* DERECHA: PANEL DE COMANDA */}
         <div className="w-full lg:w-96">
           <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border-t-8 border-orange-500 sticky top-6">
             <input placeholder="MESA / CLIENTE" value={cliente} onChange={e => setCliente(e.target.value)} className={estilos.input + " mb-2 uppercase"} />
@@ -143,12 +148,27 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
 
             {carrito.length > 0 && (
               <div className="pt-4 border-t-2 border-dashed border-gray-100">
-                {/* MÉTODOS DE PAGO */}
-                <div className="flex gap-2 mb-4">
-                  <button onClick={() => setMetodoPago('qr')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'qr' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>QR 📱</button>
-                  <button onClick={() => setMetodoPago('ef')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'ef' ? 'bg-green-600 border-green-600 text-white shadow-lg shadow-green-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>EF 💵</button>
-                  <button onClick={() => setMetodoPago('pya')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${metodoPago === 'pya' ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>PYA 🛵</button>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button onClick={() => setMetodoPago('qr')} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${metodoPago === 'qr' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>QR 📱</button>
+                  <button onClick={() => setMetodoPago('ef')} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${metodoPago === 'ef' ? 'bg-green-600 border-green-600 text-white shadow-lg shadow-green-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>EF 💵</button>
+                  <button onClick={() => setMetodoPago('pya')} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${metodoPago === 'pya' ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>PYA 🛵</button>
+                  <button onClick={() => setMetodoPago('mix')} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${metodoPago === 'mix' ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>MIX 🔀</button>
                 </div>
+
+                {/* OPCIÓN MIXTA */}
+                {metodoPago === 'mix' && (
+                  <div className="mb-4 space-y-2 bg-purple-50 p-3 rounded-2xl border border-purple-100 animate-in zoom-in duration-200">
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-purple-200">
+                      <span className="text-[9px] font-black w-10">EF:</span>
+                      <input type="number" placeholder="0.00" value={pagosMix.ef || ''} onChange={(e) => setPagosMix({...pagosMix, ef: Number(e.target.value)})} className="flex-1 text-right font-black text-xs outline-none" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-purple-200">
+                      <span className="text-[9px] font-black w-10">QR:</span>
+                      <input type="number" placeholder="0.00" value={pagosMix.qr || ''} onChange={(e) => setPagosMix({...pagosMix, qr: Number(e.target.value)})} className="flex-1 text-right font-black text-xs outline-none" />
+                    </div>
+                    <p className="text-[8px] text-center font-bold text-purple-400">RESTANTE: Bs {(totalVenta - pagosMix.ef - pagosMix.qr).toFixed(2)}</p>
+                  </div>
+                )}
 
                 {metodoPago === 'ef' && (
                   <div className="mb-4 bg-gray-50 p-3 rounded-3xl border border-gray-100 animate-in zoom-in duration-200">
@@ -173,9 +193,10 @@ export default function Menu({ productos, ventas, alTerminar }: any) {
                 
                 <button 
                   onClick={() => solicitarConfirmacion(metodoPago)} 
-                  className="w-full bg-orange-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-xl active:scale-95 transition hover:bg-orange-600"
+                  disabled={metodoPago === 'mix' && (pagosMix.ef + pagosMix.qr) < totalVenta}
+                  className={`w-full py-5 rounded-[2rem] font-black text-sm shadow-xl active:scale-95 transition text-white ${metodoPago === 'mix' ? 'bg-purple-600' : 'bg-orange-500 hover:bg-orange-600'} disabled:opacity-50`}
                 >
-                  CONFIRMAR REGISTRO 🧾
+                  {metodoPago === 'mix' ? 'CONFIRMAR PAGO MIXTO 🧾' : 'CONFIRMAR REGISTRO 🧾'}
                 </button>
               </div>
             )}
