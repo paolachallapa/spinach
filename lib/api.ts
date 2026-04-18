@@ -47,25 +47,44 @@ export const api = {
 
   // --- VENTAS ---
 
-  // Se añaden 'notas' y 'metodo' a los parámetros
-  async registrarPedido(cliente: string, carrito: any[], notas: string, metodo: string) {
-    // 1. Preparar datos de ventas incluyendo las nuevas columnas
-    const nuevasVentas = carrito.flatMap(item => 
+  /**
+   * Registra el pedido, el cajero y los montos desglosados de pago.
+   */
+  async registrarPedido(
+    cliente: string, 
+    carrito: any[], 
+    notas: string, 
+    metodo: string, 
+    cajero: string,
+    pago_ef: number = 0, // Nuevo
+    pago_qr: number = 0  // Nuevo
+  ) {
+    // 1. Aplanamos el carrito para insertar una fila por cada unidad
+    const listaAplanada = carrito.flatMap(item => 
       Array.from({ length: item.cantidad }).map(() => ({
         producto_id: item.id,
         nombre_producto: item.nombre,
         precio_venta: Number(item.precio),
         cliente: cliente.toUpperCase(),
-        notas: notas,          // <-- Nueva columna
-        metodo_pago: metodo    // <-- Nueva columna
+        notas: notas,          
+        metodo_pago: metodo,
+        cajero: cajero
       }))
     );
 
-    // 2. Insertar ventas en Supabase
+    // 2. Asignamos los montos de pago SOLO a la primera fila del pedido
+    // Esto evita que al hacer un SUM() en Supabase los montos se multipliquen
+    const nuevasVentas = listaAplanada.map((venta, index) => ({
+      ...venta,
+      pago_ef: index === 0 ? pago_ef : 0,
+      pago_qr: index === 0 ? pago_qr : 0
+    }));
+
+    // 3. Insertar ventas en Supabase
     const { error: errorVenta } = await supabase.from('ventas').insert(nuevasVentas);
     if (errorVenta) return { error: errorVenta };
 
-    // 3. Actualizar stock de cada producto vendido
+    // 4. Actualizar stock de cada producto vendido
     for (const item of carrito) {
       await supabase.from('productos')
         .update({ stock: item.stock - item.cantidad })
