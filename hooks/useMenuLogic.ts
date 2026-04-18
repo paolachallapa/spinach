@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState } from 'react' 
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
-export const useMenuLogic = (alTerminar: any) => {
+export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
   const [cliente, setCliente] = useState('')
   const [notas, setNotas] = useState('')
   const [carrito, setCarrito] = useState<any[]>([])
@@ -29,10 +29,6 @@ export const useMenuLogic = (alTerminar: any) => {
     }
   };
 
-  /**
-   * PASO 1: Solo abre el modal y prepara los datos.
-   * NO guarda en la base de datos aún.
-   */
   const solicitarConfirmacion = (metodo: string) => {
     if (!cliente.trim() || carrito.length === 0) {
       return alert("Por favor, ingresa la MESA y agrega productos.");
@@ -45,31 +41,36 @@ export const useMenuLogic = (alTerminar: any) => {
       carrito: [...carrito],
       total: totalPedido,
       notas: notas,
-      metodo: metodo
+      metodo: metodo,
+      cajero: perfilUsuario 
+        ? `${perfilUsuario.nombre} ${perfilUsuario.apellido || ''}`.trim() 
+        : 'Personal de Turno'
     });
 
     setShowModal(true);
   };
 
-  /**
-   * PASO 2: Realiza el registro real en Supabase.
-   * Se ejecuta solo al dar "SÍ" en el modal.
-   */
-  const ejecutarRegistroDB = async () => {
+  // ACTUALIZADO: Recibe el método y los montos desglosados
+  const ejecutarRegistroDB = async (metodo: string, montos: { pago_ef: number, pago_qr: number }) => {
     try {
+      // 1. Registramos el pedido a través de tu API
+      // Enviamos también los nuevos campos de pago
       const { error } = await api.registrarPedido(
         datosParaImprimir.cliente, 
         datosParaImprimir.carrito, 
         datosParaImprimir.notas, 
-        datosParaImprimir.metodo
+        metodo,
+        datosParaImprimir.cajero,
+        montos.pago_ef, // <--- Nueva columna pago_ef
+        montos.pago_qr  // <--- Nueva columna pago_qr
       );
       
       if (!error) {
-        // Obtenemos el número de pedido para el ticket
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const hoyISO = hoy.toISOString();
 
+        // 2. Calculamos el número de pedido para el ticket
         const { data: vHoy } = await supabase
           .from('ventas')
           .select('creado_at')
@@ -77,7 +78,7 @@ export const useMenuLogic = (alTerminar: any) => {
         
         const nroPedido = new Set(vHoy?.map(v => v.creado_at)).size;
         
-        return { ...datosParaImprimir, nro: `#${nroPedido}` };
+        return { ...datosParaImprimir, nro: `#${nroPedido}`, metodo };
       } else { 
         alert("Error al guardar en base de datos"); 
         return null;
@@ -89,19 +90,11 @@ export const useMenuLogic = (alTerminar: any) => {
     }
   };
 
-  /**
-   * FUNCIÓN PARA LA "X": 
-   * Solo cierra el modal. La venta NO se registra.
-   */
   const cerrarSinRegistrar = () => {
     setShowModal(false);
     setDatosParaImprimir(null);
   };
 
-  /**
-   * LIMPIEZA FINAL:
-   * Se ejecuta después de un registro exitoso.
-   */
   const finalizarLimpiarTodo = () => {
     setShowModal(false);
     setCarrito([]); 
@@ -116,8 +109,8 @@ export const useMenuLogic = (alTerminar: any) => {
     notas, setNotas, 
     carrito, 
     gestionarCarrito, 
-    solicitarConfirmacion, // Usar este en lugar de handleConfirmar
-    ejecutarRegistroDB,     // Usar este dentro del "SÍ" del modal
+    solicitarConfirmacion, 
+    ejecutarRegistroDB,     
     showModal, 
     datosParaImprimir, 
     finalizarLimpiarTodo,
