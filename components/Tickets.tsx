@@ -10,8 +10,6 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
 
   const hoy = new Date().toLocaleDateString('sv-SE');
 
-  // 1. OBTENEMOS TODOS LOS MOMENTOS DE VENTA DEL DÍA (PARA EL NÚMERO FIJO)
-  // Incluimos anulados para que la numeración sea correlativa y permanente
   const todosLosMomentosDelDia = Array.from(new Set(
     ventas
       .filter((v: any) => v.creado_at && new Date(v.creado_at).toLocaleDateString('sv-SE') === hoy)
@@ -19,7 +17,6 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
       .map((v: any) => v.creado_at)
   ));
 
-  // 2. FILTRAMOS PARA LA VISTA DE COCINA (SOLO ACTIVOS)
   const ventasActivasHoy = ventas
     .filter((v: any) => {
       if (!v.creado_at) return false;
@@ -28,7 +25,6 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
     })
     .sort((a: any, b: any) => new Date(a.creado_at).getTime() - new Date(b.creado_at).getTime());
 
-  // 3. AGRUPAMOS
   const pedidosAgrupados = ventasActivasHoy.reduce((acc: any, v: any) => {
     const pedidoKey = v.creado_at; 
     if (!acc[pedidoKey]) {
@@ -40,11 +36,19 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
         entregado: v.entregado,
         ids: [],
         timestamp: new Date(v.creado_at).getTime(),
-        keyOriginal: v.creado_at, // Guardamos la key para buscar el número fijo
+        keyOriginal: v.creado_at,
         metodo: v.metodo_pago,
-        notas_originales: v.notas
+        notas_originales: v.notas,
+        // Inicializamos los montos en 0
+        pago_ef: 0,
+        pago_qr: 0
       }
     }
+
+    // CORRECCIÓN: Sumamos los montos de todas las filas que pertenezcan al mismo creado_at
+    acc[pedidoKey].pago_ef += Number(v.pago_ef || 0);
+    acc[pedidoKey].pago_qr += Number(v.pago_qr || 0);
+
     acc[pedidoKey].items.push({ id: v.id, nombre: v.nombre_producto, precio: Number(v.precio_venta), cantidad: 1 });
     acc[pedidoKey].total += Number(v.precio_venta);
     acc[pedidoKey].ids.push(v.id);
@@ -52,13 +56,31 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
     return acc;
   }, {});
 
-  // 4. ASIGNAMOS EL NRO DE PEDIDO BASADO EN EL HISTORIAL COMPLETO DEL DIA
   const listaPedidos = Object.values(pedidosAgrupados)
     .sort((a: any, b: any) => a.timestamp - b.timestamp)
     .map((pedido: any) => ({
       ...pedido,
       nroPedido: todosLosMomentosDelDia.indexOf(pedido.keyOriginal) + 1
     }));
+
+  const manejarReimpresion = (e: React.MouseEvent, pedido: any) => {
+    e.stopPropagation(); 
+    
+    // Enviamos los montos acumulados a la función de impresión
+    const detallesMix = (pedido.metodo === 'mix' || pedido.metodo === 'PAGO MIXTO') 
+      ? { ef: pedido.pago_ef, qr: pedido.pago_qr } 
+      : null;
+
+    printer.imprimirTicket(
+        pedido.cliente, 
+        pedido.items, 
+        pedido.total, 
+        pedido.notas_originales || `HORA: ${pedido.hora}`, 
+        `#${pedido.nroPedido}`, 
+        pedido.metodo,
+        detallesMix
+    );
+  };
 
   const abrirModalAnulacion = (e: React.MouseEvent, pedido: any) => {
     e.stopPropagation();
@@ -88,9 +110,20 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
       .then(({ error }) => { if (error) alTerminar(); });
   };
 
-  const manejarReimpresion = (e: React.MouseEvent, pedido: any) => {
-    e.stopPropagation(); 
-    printer.imprimirTicket(pedido.cliente, pedido.items, pedido.total, pedido.notas_originales || `HORA: ${pedido.hora}`, `#${pedido.nroPedido}`, pedido.metodo);
+  const renderEtiquetaPago = (metodo: string) => {
+    const estilos: any = {
+      qr: "bg-blue-100 text-blue-600 border-blue-200",
+      ef: "bg-green-100 text-green-600 border-green-200",
+      pya: "bg-red-100 text-red-600 border-red-200",
+      mix: "bg-purple-100 text-purple-600 border-purple-200"
+    };
+    const nombres: any = { qr: "QR", ef: "EFECTIVO", pya: "P. YA", mix: "MIXTO" };
+    
+    return (
+      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${estilos[metodo] || 'bg-gray-100 text-gray-400'}`}>
+        {nombres[metodo] || 'S.D.'}
+      </span>
+    );
   };
 
   return (
@@ -134,7 +167,7 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded font-black">#{pedido.nroPedido}</span>
-                      <p className="text-[9px] font-black text-blue-400 uppercase leading-none">PEDIDO</p>
+                      {renderEtiquetaPago(pedido.metodo)}
                     </div>
                     <h3 className="font-black text-blue-900 uppercase text-sm leading-none mt-1">{pedido.cliente}</h3>
                   </div>
