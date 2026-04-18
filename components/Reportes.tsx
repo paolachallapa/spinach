@@ -1,4 +1,3 @@
-// components/Reportes.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -13,7 +12,11 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
     const fetchCajero = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase.from('perfiles').select('nombre, apellido').eq('id', user.id).single();
+        const { data } = await supabase
+          .from('perfiles')
+          .select('nombre, apellido')
+          .eq('id', user.id)
+          .single();
         if (data) setNombreCajero(`${data.nombre} ${data.apellido}`);
       }
     };
@@ -54,11 +57,12 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
         </div>
       </div>
 
-      {/* TARJETAS DE MÉTODOS DE PAGO */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Efectivo" valor={metodos.ef} color="gray" />
-        <StatCard label="QR / Transf." valor={metodos.qr} color="blue" />
-        <StatCard label="PedidosYa" valor={metodos.pya} color="orange" />
+      {/* TARJETAS DE MÉTODOS DE PAGO Y GASTOS */}
+      <div className="grid grid-cols-1  md:grid-cols-3 gap-4 mb-8">
+        <StatCard label="Efectivo Bruto" valor={metodos.ef} color="gray" sub="Total Recibido" />
+        <StatCard label="QR / Transf." valor={metodos.qr} color="blue" sub="En Banco" />
+        <StatCard label="PedidosYa" valor={metodos.pya} color="orange" sub="En App" />
+       
       </div>
 
       {/* CUERPO DEL RESUMEN */}
@@ -72,32 +76,40 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
         </SectionContainer>
       </div>
 
-      {/* FOOTER DE TOTALES */}
-      <div className="p-6 bg-green-700 rounded-3xl text-white flex justify-between items-center shadow-xl">
-        <div>
-          <span className="font-black uppercase text-[10px] block opacity-70 tracking-tighter">Efectivo Real en Caja</span>
+      {/* FOOTER DE TOTALES - RESUMEN DE CIERRE */}
+      <div className="p-6 bg-slate-900 rounded-[2rem] text-white flex flex-col md:flex-row justify-between items-center shadow-xl gap-4">
+        <div className="text-center md:text-left">
+          <span className="font-black uppercase text-[10px] block text-green-400 tracking-widest mb-1">
+            Efectivo Real en Caja (Neto)
+          </span>
           <span className="text-3xl font-black italic">Bs {totales.efectivoNeto.toFixed(2)}</span>
+          <p className="text-[9px] text-slate-400 font-medium uppercase mt-1">
+            * Efectivo Bruto menos Gastos
+          </p>
         </div>
-        <div className="text-right flex flex-col">
-          <span className="text-[10px] font-black opacity-70 uppercase tracking-tighter">Ventas Brutas Totales</span>
-          <span className="text-lg font-bold">Bs {totales.totalVentas.toFixed(2)}</span>
+        
+        <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-slate-700 pt-4 md:pt-0 md:pl-8">
+          <span className="text-[10px] font-black opacity-50 uppercase tracking-tighter block">Total Ventas Brutas</span>
+          <span className="text-xl font-bold">Bs {totales.totalVentas.toFixed(2)}</span>
         </div>
       </div>
     </div>
   );
 }
 
-// COMPONENTES AUXILIARES PARA LIMPIEZA VISUAL
-function StatCard({ label, valor, color }: any) {
+// COMPONENTES AUXILIARES
+function StatCard({ label, valor, color, sub }: any) {
   const themes: any = {
     gray: 'bg-gray-50 border-gray-100 text-gray-700',
     blue: 'bg-blue-50 border-blue-100 text-blue-700',
-    orange: 'bg-orange-50 border-orange-100 text-orange-700'
+    orange: 'bg-orange-50 border-orange-100 text-orange-700',
+    red: 'bg-red-50 border-red-100 text-red-600'
   };
   return (
-    <div className={`p-5 rounded-2xl border flex flex-col items-center ${themes[color]}`}>
+    <div className={`p-5 rounded-2xl border flex flex-col items-center text-center ${themes[color]}`}>
       <span className="text-[9px] font-black uppercase mb-1 opacity-50 tracking-widest">{label}</span>
       <span className="text-xl font-black italic">Bs {valor.toFixed(2)}</span>
+      <span className="text-[8px] font-bold mt-1 opacity-40 uppercase">{sub}</span>
     </div>
   );
 }
@@ -124,7 +136,7 @@ function SectionList({ items, emptyMsg }: { items: ItemResumen[], emptyMsg: stri
       {items.map((item, i) => (
         <div key={i} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
           <span className="text-gray-600 uppercase font-black tracking-tighter">
-            {item.nombre} <span className="text-gray-600 uppercase font-black tracking-tighter">(X{item.cantidad})</span>
+            {item.nombre} <span className="text-orange-500 ml-1">x{item.cantidad}</span>
           </span>
           <span className="font-bold text-gray-900">Bs {item.total.toFixed(2)}</span>
         </div>
