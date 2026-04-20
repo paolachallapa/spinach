@@ -50,19 +50,22 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
     setShowModal(true);
   };
 
-  // ACTUALIZADO: Recibe el método y los montos desglosados
+  /**
+   * EJECUTAR REGISTRO DB
+   * Recibe el método de pago y los montos desglosados (pago_ef, pago_qr)
+   * para cumplir con los 7 argumentos requeridos por api.registrarPedido.
+   */
   const ejecutarRegistroDB = async (metodo: string, montos: { pago_ef: number, pago_qr: number }) => {
     try {
-      // 1. Registramos el pedido a través de tu API
-      // Enviamos también los nuevos campos de pago
+      // Sincronización con la API: enviamos los 7 argumentos esperados
       const { error } = await api.registrarPedido(
-        datosParaImprimir.cliente, 
-        datosParaImprimir.carrito, 
-        datosParaImprimir.notas, 
-        metodo,
-        datosParaImprimir.cajero,
-        montos.pago_ef, // <--- Nueva columna pago_ef
-        montos.pago_qr  // <--- Nueva columna pago_qr
+        datosParaImprimir.cliente,   // 1. Mesa/Cliente
+        datosParaImprimir.carrito,   // 2. Productos
+        datosParaImprimir.notas,     // 3. Observaciones
+        metodo,                      // 4. Método (ef, qr, mix, pya)
+        datosParaImprimir.cajero,    // 5. Responsable
+        montos.pago_ef,              // 6. Monto en efectivo
+        montos.pago_qr               // 7. Monto en QR
       );
       
       if (!error) {
@@ -70,7 +73,7 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
         hoy.setHours(0, 0, 0, 0);
         const hoyISO = hoy.toISOString();
 
-        // 2. Calculamos el número de pedido para el ticket
+        // Cálculo del número de pedido correlativo para el día
         const { data: vHoy } = await supabase
           .from('ventas')
           .select('creado_at')
