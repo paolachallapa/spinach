@@ -48,7 +48,9 @@ export const api = {
   // --- VENTAS ---
 
   /**
-   * Registra el pedido, el cajero y los montos desglosados de pago.
+   * REGISTRAR PEDIDO
+   * Ahora recibe 7 argumentos para manejar pagos desglosados (Efectivo y QR).
+   * Implementa la lógica de "Primera Fila" para no duplicar montos financieros.
    */
   async registrarPedido(
     cliente: string, 
@@ -56,10 +58,11 @@ export const api = {
     notas: string, 
     metodo: string, 
     cajero: string,
-    pago_ef: number = 0, // Nuevo
-    pago_qr: number = 0  // Nuevo
+    pago_ef: number = 0, 
+    pago_qr: number = 0
   ) {
-    // 1. Aplanamos el carrito para insertar una fila por cada unidad
+    // 1. Aplanamos el carrito para insertar una fila por cada UNIDAD de producto
+    // Si el cliente lleva 2 Hamburguesas, se generan 2 filas de venta.
     const listaAplanada = carrito.flatMap(item => 
       Array.from({ length: item.cantidad }).map(() => ({
         producto_id: item.id,
@@ -72,19 +75,20 @@ export const api = {
       }))
     );
 
-    // 2. Asignamos los montos de pago SOLO a la primera fila del pedido
-    // Esto evita que al hacer un SUM() en Supabase los montos se multipliquen
+    // 2. Lógica Anti-Duplicación de Totales:
+    // Asignamos los montos de pago SOLO a la primera fila del pedido (index === 0).
+    // Las demás filas van con 0 en pago_ef y pago_qr para que el SUM() de la DB sea exacto.
     const nuevasVentas = listaAplanada.map((venta, index) => ({
       ...venta,
       pago_ef: index === 0 ? pago_ef : 0,
       pago_qr: index === 0 ? pago_qr : 0
     }));
 
-    // 3. Insertar ventas en Supabase
+    // 3. Insertar todas las filas en la tabla 'ventas' de Supabase
     const { error: errorVenta } = await supabase.from('ventas').insert(nuevasVentas);
     if (errorVenta) return { error: errorVenta };
 
-    // 4. Actualizar stock de cada producto vendido
+    // 4. Actualización de Stock (Loop para reducir existencias)
     for (const item of carrito) {
       await supabase.from('productos')
         .update({ stock: item.stock - item.cantidad })
