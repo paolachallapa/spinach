@@ -51,7 +51,7 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
 
           .totales-area { margin-left: auto; width: 220px; margin-top: 10px; }
           .total-item { display: flex; justify-content: space-between; padding: 2px 0; font-size: 15px;}
-          .total-final { display: flex; justify-content: space-between; padding: 8px 0; background: #15803d; color: black; border-radius: 4px; font-weight: bold; font-size: 17px; }
+          .total-final { display: flex; justify-content: space-between; padding: 8px 0; color: black; border-radius: 4px; font-size: 17px; }
           
           .footer-wrapper { flex-shrink: 0; padding: 20px; width: 100%; box-sizing: border-box; }
           .firma-container { display: flex; justify-content: center; margin-bottom: 15px; }
