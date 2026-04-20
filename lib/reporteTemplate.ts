@@ -1,18 +1,35 @@
 export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) => {
   const { listaPrincipales, listaExtras, metodos, totales, fechaFormateada } = data;
 
-  // Actualizamos la función para incluir el cálculo del precio unitario
-  const generarFilas = (items: any[]) => items.map(item => {
-    const precioUnitario = item.total / item.cantidad;
-    return `
-      <tr>
-        <td style="width: 45%;">${item.nombre}</td>
-        <td style="width: 15%; text-align: center;">${item.cantidad}</td>
-        <td style="width: 20%; text-align: center;">Bs ${precioUnitario.toFixed(2)}</td>
-        <td style="width: 20%; text-align: right;">Bs ${item.total.toFixed(2)}</td>
+  // Función para generar las filas y calcular los subtotales de la sección
+  const generarSeccionTabla = (items: any[]) => {
+    const filas = items.map(item => {
+      const precioUnitario = item.total / item.cantidad;
+      return `
+        <tr>
+          <td style="width: 45%;">${item.nombre}</td>
+          <td style="width: 15%; text-align: center;">${item.cantidad}</td>
+          <td style="width: 20%; text-align: center;">Bs ${precioUnitario.toFixed(2)}</td>
+          <td style="width: 20%; text-align: right;">Bs ${item.total.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Calculamos los totales de esta sección específica
+    const subtotalCantidad = items.reduce((acc, item) => acc + item.cantidad, 0);
+    const subtotalDinero = items.reduce((acc, item) => acc + item.total, 0);
+
+    const filaTotal = `
+      <tr style="background: #f9f9f9; font-weight: bold; border-top: 1px solid #333;">
+        <td style="text-align: right; text-transform: uppercase; font-size: 10px;">TOTAL SECCIÓN:</td>
+        <td style="text-align: center; color: #160e0f;">${subtotalCantidad} </td>
+        <td></td>
+        <td style="text-align: right; color: #160e0f;">Bs ${subtotalDinero.toFixed(2)}</td>
       </tr>
     `;
-  }).join('');
+
+    return filas + filaTotal;
+  };
 
   return `
     <html>
@@ -88,7 +105,7 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
                 <th style="width: 20%; text-align: right;">Total</th>
               </tr>
             </thead>
-            <tbody>${generarFilas(listaPrincipales)}</tbody> 
+            <tbody>${generarSeccionTabla(listaPrincipales)}</tbody> 
           </table>
 
           ${listaExtras.length > 0 ? `
@@ -102,14 +119,14 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
                   <th style="width: 20%; text-align: right;">Total</th>
                 </tr>
               </thead>
-              <tbody>${generarFilas(listaExtras)}</tbody>
+              <tbody>${generarSeccionTabla(listaExtras)}</tbody>
             </table> 
           ` : ''}
 
           <div class="totales-area">
             <div class="total-item"><span>Ventas Brutas:</span><span>Bs ${totales.totalVentas.toFixed(2)}</span></div> 
             <div class="total-item" style="color: #b91c1c;"><span>Gastos:</span><span>-Bs ${totales.totalGastos.toFixed(2)}</span></div> 
-            <div class="total-final"><span>EFECTIVO NETO:</span><span>Bs${totales.efectivoNeto.toFixed(2)}</span></div> 
+            <div class="total-final"><span>EFECTIVO NETO:</span><span>Bs ${totales.efectivoNeto.toFixed(2)}</span></div> 
           </div>
         </div>
 
@@ -117,16 +134,13 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
           <div class="firma-container">
             <div class="firma-box">
               <p>${nombreCajero}</p> 
-              <small style="color: #999; font-size: 8px;">Firma autorizada</small>
+              <small style="color: #999; font-size: 8px;">Firma Responsable</small>
             </div>
           </div>
           <div class="footer-digital">Spinach POS — ${new Date().toLocaleString('es-BO')}</div> 
         </div>
         <script>
-          window.onload = () => { 
-            window.print(); 
-            setTimeout(() => { window.close(); }, 500); 
-          }
+          window.onload = () => { window.print(); setTimeout(() => { window.close(); }, 500); }
         </script>
       </body>
     </html>
