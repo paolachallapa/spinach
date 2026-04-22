@@ -1,4 +1,5 @@
 'use client'
+
 import { useState } from 'react' 
 import { printer } from '@/lib/printer'
 import { estilos, BotonAccionmenu } from './UI'
@@ -16,6 +17,9 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
   const [metodoPago, setMetodoPago] = useState<'qr' | 'ef' | 'pya' | 'mix'>('ef');
   const [pagosMix, setPagosMix] = useState({ ef: 0, qr: 0 });
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
+  
+  // ESTADO DE BLOQUEO ANTI-DUPLICADOS
+  const [procesando, setProcesando] = useState(false);
 
   const totalVenta = carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0);
   
@@ -39,30 +43,40 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
   .reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0) || 0;
 
   const manejarGuardadoEImpresion = async () => {
-  // Calculamos los montos según el método elegido
-  const montosParaDB = {
-    pago_ef: metodoPago === 'ef' ? totalVenta : (metodoPago === 'mix' ? pagosMix.ef : 0),
-    pago_qr: metodoPago === 'qr' ? totalVenta : (metodoPago === 'mix' ? pagosMix.qr : 0)
-  };
+    if (procesando) return; // Si ya se está procesando, bloqueamos clics extras
 
-  // Pasamos los montos a la función del hook
-  const datosFinales = await ejecutarRegistroDB(metodoPago, montosParaDB);
-  
-  if (datosFinales) {
-    printer.imprimirTicket(
-      datosFinales.cliente, 
-      datosFinales.carrito, 
-      datosFinales.total, 
-      datosFinales.notas, 
-      datosFinales.nro, 
-      datosFinales.metodo,
-      metodoPago === 'mix' ? pagosMix : null
-    );
+    setProcesando(true);
+
+    try {
+      // Calculamos los montos según el método elegido
+      const montosParaDB = {
+        pago_ef: metodoPago === 'ef' ? totalVenta : (metodoPago === 'mix' ? pagosMix.ef : 0),
+        pago_qr: metodoPago === 'qr' ? totalVenta : (metodoPago === 'mix' ? pagosMix.qr : 0)
+      };
+
+      // Pasamos los montos a la función del hook y esperamos
+      const datosFinales = await ejecutarRegistroDB(metodoPago, montosParaDB);
       
-      setMontoRecibido(0);
-      setPagosMix({ ef: 0, qr: 0 });
-      setMetodoPago('ef');
-      finalizarLimpiarTodo();
+      if (datosFinales) {
+        await printer.imprimirTicket(
+          datosFinales.cliente, 
+          datosFinales.carrito, 
+          datosFinales.total, 
+          datosFinales.notes, 
+          datosFinales.nro, 
+          datosFinales.metodo,
+          metodoPago === 'mix' ? pagosMix : null
+        );
+          
+        setMontoRecibido(0);
+        setPagosMix({ ef: 0, qr: 0 });
+        setMetodoPago('ef');
+        finalizarLimpiarTodo();
+      }
+    } catch (error) {
+      console.error("Error al registrar:", error);
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -208,6 +222,7 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
         isOpen={showModal} 
         onConfirm={manejarGuardadoEImpresion} 
         onCancel={cerrarSinRegistrar} 
+        isProcessing={procesando}
       />
     </>
   )
