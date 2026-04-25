@@ -3,10 +3,17 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useReporteData, ItemResumen } from '@/hooks/useReporteData'
 import { getReporteHTML } from '@/lib/reporteTemplate'
+import { ModalDesglosePagos } from '@/components/ui/ModalDesglosePagos'
 
 export default function Reportes({ ventas, gastos, productos = [] }: { ventas: any[], gastos: any[], productos?: any[] }) {
   const [fecha, setFecha] = useState(new Date().toLocaleDateString('sv-SE'))
   const [nombreCajero, setNombreCajero] = useState('Cargando...')
+  
+  const [modalInfo, setModalInfo] = useState<{
+    open: boolean;
+    tipo: 'ef' | 'qr' | 'pya';
+    titulo: string;
+  }>({ open: false, tipo: 'ef', titulo: '' });
 
   useEffect(() => {
     const fetchCajero = async () => {
@@ -25,6 +32,12 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
 
   const dataReporte = useReporteData(ventas, gastos, productos, fecha);
   const { listaPrincipales, listaExtras, metodos, totales } = dataReporte;
+
+  // --- FILTRO CRUCIAL: Solo ventas que coincidan con la fecha seleccionada ---
+  const ventasFiltradasPorFecha = ventas.filter(v => {
+    const fechaVenta = new Date(v.creado_at).toLocaleDateString('sv-SE');
+    return fechaVenta === fecha;
+  });
 
   const imprimirPDF = () => {
     const win = window.open('', '', 'width=800,height=900');
@@ -58,11 +71,28 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
       </div>
 
       {/* TARJETAS DE MÉTODOS DE PAGO Y GASTOS */}
-      <div className="grid grid-cols-1  md:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Efectivo Bruto" valor={metodos.ef} color="gray" sub="Total Recibido" />
-        <StatCard label="QR / Transf." valor={metodos.qr} color="blue" sub="En Banco" />
-        <StatCard label="PedidosYa" valor={metodos.pya} color="orange" sub="En App" />
-       
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <StatCard 
+          label="Efectivo Bruto" 
+          valor={metodos.ef} 
+          color="gray" 
+          sub="Total Recibido" 
+          onClick={() => setModalInfo({ open: true, tipo: 'ef', titulo: 'Desglose de Efectivo' })}
+        />
+        <StatCard 
+          label="QR / Transf." 
+          valor={metodos.qr} 
+          color="blue" 
+          sub="En Banco" 
+          onClick={() => setModalInfo({ open: true, tipo: 'qr', titulo: 'Desglose de QR' })}
+        />
+        <StatCard 
+          label="PedidosYa" 
+          valor={metodos.pya} 
+          color="orange" 
+          sub="En App" 
+          onClick={() => setModalInfo({ open: true, tipo: 'pya', titulo: 'Desglose PedidosYa' })}
+        />
       </div>
 
       {/* CUERPO DEL RESUMEN */}
@@ -93,24 +123,36 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
           <span className="text-xl font-bold">Bs {totales.totalVentas.toFixed(2)}</span>
         </div>
       </div>
+
+      {/* MODAL DE DESGLOSE - Ahora con ventas filtradas por fecha */}
+      <ModalDesglosePagos 
+        isOpen={modalInfo.open}
+        onClose={() => setModalInfo({ ...modalInfo, open: false })}
+        titulo={modalInfo.titulo}
+        tipo={modalInfo.tipo}
+        ventas={ventasFiltradasPorFecha}
+      />
     </div>
   );
 }
 
 // COMPONENTES AUXILIARES
-function StatCard({ label, valor, color, sub }: any) {
+function StatCard({ label, valor, color, sub, onClick }: any) {
   const themes: any = {
-    gray: 'bg-gray-50 border-gray-100 text-gray-700',
-    blue: 'bg-blue-50 border-blue-100 text-blue-700',
-    orange: 'bg-orange-50 border-orange-100 text-orange-700',
-    red: 'bg-red-50 border-red-100 text-red-600'
+    gray: 'bg-gray-50 border-gray-100 text-gray-700 hover:border-gray-300',
+    blue: 'bg-blue-50 border-blue-100 text-blue-700 hover:border-blue-300',
+    orange: 'bg-orange-50 border-orange-100 text-orange-700 hover:border-orange-300',
+    red: 'bg-red-50 border-red-100 text-red-600 hover:border-red-300'
   };
   return (
-    <div className={`p-5 rounded-2xl border flex flex-col items-center text-center ${themes[color]}`}>
+    <button 
+      onClick={onClick}
+      className={`p-5 rounded-2xl border flex flex-col items-center text-center transition-all active:scale-95 ${themes[color]}`}
+    >
       <span className="text-[9px] font-black uppercase mb-1 opacity-50 tracking-widest">{label}</span>
       <span className="text-xl font-black italic">Bs {valor.toFixed(2)}</span>
       <span className="text-[8px] font-bold mt-1 opacity-40 uppercase">{sub}</span>
-    </div>
+    </button>
   );
 }
 
