@@ -49,8 +49,8 @@ export const api = {
 
   /**
    * REGISTRAR PEDIDO
-   * Ahora recibe 7 argumentos para manejar pagos desglosados (Efectivo y QR).
-   * Implementa la lógica de "Primera Fila" para no duplicar montos financieros.
+   * Maneja 7 argumentos para pagos desglosados (Efectivo y QR).
+   * Implementa lógica de "Primera Fila" para evitar duplicar montos en reportes financieros.
    */
   async registrarPedido(
     cliente: string, 
@@ -61,8 +61,7 @@ export const api = {
     pago_ef: number = 0, 
     pago_qr: number = 0
   ) {
-    // 1. Aplanamos el carrito para insertar una fila por cada UNIDAD de producto
-    // Si el cliente lleva 2 Hamburguesas, se generan 2 filas de venta.
+    // 1. Aplanamos el carrito para insertar una fila por cada unidad de producto
     const listaAplanada = carrito.flatMap(item => 
       Array.from({ length: item.cantidad }).map(() => ({
         producto_id: item.id,
@@ -71,30 +70,32 @@ export const api = {
         cliente: cliente.toUpperCase(),
         notas: notas,          
         metodo_pago: metodo,
-        cajero: cajero
+        cajero: cajero,
+        estado: 'completado' // Aseguramos el estado para que aparezca en reportes
       }))
     );
 
-    // 2. Lógica Anti-Duplicación de Totales:
-    // Asignamos los montos de pago SOLO a la primera fila del pedido (index === 0).
-    // Las demás filas van con 0 en pago_ef y pago_qr para que el SUM() de la DB sea exacto.
+    // 2. Lógica Anti-Duplicación:
+    // Asignamos los montos de pago SOLO a la primera fila del pedido.
     const nuevasVentas = listaAplanada.map((venta, index) => ({
       ...venta,
       pago_ef: index === 0 ? pago_ef : 0,
       pago_qr: index === 0 ? pago_qr : 0
     }));
 
-    // 3. Insertar todas las filas en la tabla 'ventas' de Supabase
-    const { error: errorVenta } = await supabase.from('ventas').insert(nuevasVentas);
-    if (errorVenta) return { error: errorVenta };
+    // 3. Insertar filas en Supabase
+    const { data, error: errorVenta } = await supabase.from('ventas').insert(nuevasVentas).select();
+    
+    if (errorVenta) return { error: errorVenta, data: null };
 
-    // 4. Actualización de Stock (Loop para reducir existencias)
+    // 4. Actualización de Stock
     for (const item of carrito) {
       await supabase.from('productos')
         .update({ stock: item.stock - item.cantidad })
         .eq('id', item.id);
     }
 
-    return { error: null };
+    // Retornamos data y error para satisfacer a TypeScript en useMenuLogic
+    return { error: null, data };
   }
 };
