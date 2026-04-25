@@ -52,34 +52,32 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
 
   /**
    * EJECUTAR REGISTRO DB
-   * Recibe el método de pago y los montos desglosados (pago_ef, pago_qr)
-   * para cumplir con los 7 argumentos requeridos por api.registrarPedido.
+   * Enviamos los 7 argumentos para cumplir con la interfaz de la API.
    */
   const ejecutarRegistroDB = async (metodo: string, montos: { pago_ef: number, pago_qr: number }) => {
     try {
-      // Sincronización con la API: enviamos los 7 argumentos esperados
+      // 1. Registro mediante API (Sincronizado con los 7 parámetros)
       const { error } = await api.registrarPedido(
-        datosParaImprimir.cliente,   // 1. Mesa/Cliente
-        datosParaImprimir.carrito,   // 2. Productos
-        datosParaImprimir.notas,     // 3. Observaciones
-        metodo,                      // 4. Método (ef, qr, mix, pya)
-        datosParaImprimir.cajero,    // 5. Responsable
-        montos.pago_ef,              // 6. Monto en efectivo
-        montos.pago_qr               // 7. Monto en QR
+        datosParaImprimir.cliente,   // 1
+        datosParaImprimir.carrito,   // 2
+        datosParaImprimir.notas,     // 3
+        metodo,                      // 4
+        datosParaImprimir.cajero,    // 5
+        montos.pago_ef,              // 6
+        montos.pago_qr               // 7
       );
       
       if (!error) {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
-        const hoyISO = hoy.toISOString();
 
-        // Cálculo del número de pedido correlativo para el día
-        const { data: vHoy } = await supabase
+        // 2. Cálculo eficiente del número de pedido (correlativo diario)
+        const { count } = await supabase
           .from('ventas')
-          .select('creado_at')
-          .gte('creado_at', hoyISO);
+          .select('*', { count: 'exact', head: true })
+          .gte('creado_at', hoy.toISOString());
         
-        const nroPedido = new Set(vHoy?.map(v => v.creado_at)).size;
+        const nroPedido = (count || 0) + 1;
         
         return { ...datosParaImprimir, nro: `#${nroPedido}`, metodo };
       } else { 
@@ -87,7 +85,7 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
         return null;
       }
     } catch (err) { 
-      console.error(err);
+      console.error("Error crítico:", err);
       alert("Error de conexión"); 
       return null;
     }
