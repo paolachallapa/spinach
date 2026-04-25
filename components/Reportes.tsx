@@ -136,7 +136,7 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
   );
 }
 
-// COMPONENTES AUXILIARES
+// COMPONENTES AUXILIARES.
 function StatCard({ label, valor, color, sub, onClick }: any) {
   const themes: any = {
     gray: 'bg-gray-50 border-gray-100 text-gray-700 hover:border-gray-300',
