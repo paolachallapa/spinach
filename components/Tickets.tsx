@@ -39,13 +39,13 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
         keyOriginal: v.creado_at,
         metodo: v.metodo_pago,
         notas_originales: v.notas,
-        // Inicializamos los montos en 0
         pago_ef: 0,
-        pago_qr: 0
+        pago_qr: 0,
+        // CORRECCIÓN: Usamos slice(0,5) para que coincida con el ModalDesglosePagos
+        referencia: v.id ? v.id.toString().slice(0, 5).toUpperCase() : 'S/R'
       }
     }
 
-    // CORRECCIÓN: Sumamos los montos de todas las filas que pertenezcan al mismo creado_at
     acc[pedidoKey].pago_ef += Number(v.pago_ef || 0);
     acc[pedidoKey].pago_qr += Number(v.pago_qr || 0);
 
@@ -66,7 +66,6 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
   const manejarReimpresion = (e: React.MouseEvent, pedido: any) => {
     e.stopPropagation(); 
     
-    // Enviamos los montos acumulados a la función de impresión
     const detallesMix = (pedido.metodo === 'mix' || pedido.metodo === 'PAGO MIXTO') 
       ? { ef: pedido.pago_ef, qr: pedido.pago_qr } 
       : null;
@@ -172,8 +171,12 @@ export default function Tickets({ ventas, alTerminar, perfilUsuario }: any) {
                     <h3 className="font-black text-blue-900 uppercase text-sm leading-none mt-1">{pedido.cliente}</h3>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end">
                   <p className="text-[10px] font-bold text-gray-400">{pedido.hora}</p>
+                  {/* VISUALIZACIÓN DEL ID PARA CONTROL */}
+                  <span className="text-[9px] font-black text-blue-500/50 tracking-tighter uppercase">
+                    ID: #{pedido.referencia}
+                  </span>
                   {pedido.entregado && <span className="text-[8px] font-black text-green-600 uppercase">✓ Entregado</span>}
                 </div>
               </div>
