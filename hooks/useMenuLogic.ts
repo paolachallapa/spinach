@@ -52,11 +52,11 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
 
   /**
    * EJECUTAR REGISTRO DB
-   * Enviamos los 7 argumentos para cumplir con la interfaz de la API.
+   * Enviamos los 7 argumentos y restamos el stock de los productos.
    */
   const ejecutarRegistroDB = async (metodo: string, montos: { pago_ef: number, pago_qr: number }) => {
     try {
-      // 1. Registro mediante API (Sincronizado con los 7 parámetros)
+      // 1. Registro mediante API
       const { error } = await api.registrarPedido(
         datosParaImprimir.cliente,   // 1
         datosParaImprimir.carrito,   // 2
@@ -68,10 +68,21 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
       );
       
       if (!error) {
+        // --- INICIO RESTA DE STOCK ---
+        for (const item of datosParaImprimir.carrito) {
+          const { error: stockError } = await supabase
+            .from('productos')
+            .update({ stock: item.stock - item.cantidad })
+            .eq('id', item.id);
+
+          if (stockError) console.error("Error al actualizar stock:", stockError);
+        }
+        // --- FIN RESTA DE STOCK ---
+
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
 
-        // 2. Cálculo eficiente del número de pedido (correlativo diario)
+        // 2. Cálculo del número de pedido
         const { count } = await supabase
           .from('ventas')
           .select('*', { count: 'exact', head: true })
