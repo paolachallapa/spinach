@@ -52,31 +52,37 @@ export const useMenuLogic = (alTerminar: any, perfilUsuario: any) => {
 
   /**
    * EJECUTAR REGISTRO DB
-   * Enviamos los 7 argumentos y restamos el stock de los productos.
+   * Optimizamos la resta de stock con Promise.all para evitar bloqueos
    */
   const ejecutarRegistroDB = async (metodo: string, montos: { pago_ef: number, pago_qr: number }) => {
     try {
       // 1. Registro mediante API
       const { error } = await api.registrarPedido(
-        datosParaImprimir.cliente,   // 1
-        datosParaImprimir.carrito,   // 2
-        datosParaImprimir.notas,     // 3
-        metodo,                      // 4
-        datosParaImprimir.cajero,    // 5
-        montos.pago_ef,              // 6
-        montos.pago_qr               // 7
+        datosParaImprimir.cliente,   
+        datosParaImprimir.carrito,   
+        datosParaImprimir.notas,     
+        metodo,                      
+        datosParaImprimir.cajero,    
+        montos.pago_ef,              
+        montos.pago_qr               
       );
       
       if (!error) {
-        // --- INICIO RESTA DE STOCK ---
-        for (const item of datosParaImprimir.carrito) {
-          const { error: stockError } = await supabase
+        // --- INICIO RESTA DE STOCK OPTIMIZADA ---
+        // Ejecutamos todas las actualizaciones en paralelo para que sea más seguro y rápido
+        const actualizaciones = datosParaImprimir.carrito.map((item: any) => 
+          supabase
             .from('productos')
             .update({ stock: item.stock - item.cantidad })
-            .eq('id', item.id);
+            .eq('id', item.id)
+        );
 
-          if (stockError) console.error("Error al actualizar stock:", stockError);
-        }
+        const resultados = await Promise.all(actualizaciones);
+        
+        // Verificamos si alguna actualización de stock falló en consola
+        resultados.forEach((res, index) => {
+          if (res.error) console.error(`Error stock producto ${datosParaImprimir.carrito[index].nombre}:`, res.error);
+        });
         // --- FIN RESTA DE STOCK ---
 
         const hoy = new Date();
