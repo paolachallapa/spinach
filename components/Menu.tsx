@@ -13,17 +13,13 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
     showModal, datosParaImprimir, finalizarLimpiarTodo, cerrarSinRegistrar
   } = useMenuLogic(alTerminar, perfilUsuario);
 
-  // ESTADOS ACTUALIZADOS PARA MIX
   const [metodoPago, setMetodoPago] = useState<'qr' | 'ef' | 'pya' | 'mix'>('ef');
   const [pagosMix, setPagosMix] = useState({ ef: 0, qr: 0 });
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
-  
-  // ESTADO DE BLOQUEO ANTI-DUPLICADOS
   const [procesando, setProcesando] = useState(false);
 
   const totalVenta = carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0);
   
-  // Lógica de cambio adaptada para ambos modos
   const cambio = metodoPago === 'ef' 
     ? (montoRecibido > totalVenta ? (montoRecibido - totalVenta).toFixed(2) : "0.00")
     : (pagosMix.ef > (totalVenta - pagosMix.qr) ? (pagosMix.ef - (totalVenta - pagosMix.qr)).toFixed(2) : "0.00");
@@ -43,18 +39,16 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
   .reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0) || 0;
 
   const manejarGuardadoEImpresion = async () => {
-    if (procesando) return; // Si ya se está procesando, bloqueamos clics extras
-
+    if (procesando) return;
     setProcesando(true);
 
     try {
-      // Calculamos los montos según el método elegido
+      // Configuramos los montos para que el QR se registre correctamente en la caja
       const montosParaDB = {
         pago_ef: metodoPago === 'ef' ? totalVenta : (metodoPago === 'mix' ? pagosMix.ef : 0),
-        pago_qr: metodoPago === 'qr' ? totalVenta : (metodoPago === 'mix' ? pagosMix.qr : 0)
+        pago_qr: (metodoPago === 'qr' || metodoPago === 'pya') ? totalVenta : (metodoPago === 'mix' ? pagosMix.qr : 0)
       };
 
-      // Pasamos los montos a la función del hook y esperamos
       const datosFinales = await ejecutarRegistroDB(metodoPago, montosParaDB);
       
       if (datosFinales) {
@@ -62,7 +56,7 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
           datosFinales.cliente, 
           datosFinales.carrito, 
           datosFinales.total, 
-          datosFinales.notes, 
+          datosFinales.notas, // Corregido para que coincida con el hook
           datosFinales.nro, 
           datosFinales.metodo,
           metodoPago === 'mix' ? pagosMix : null
@@ -169,7 +163,6 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
                   <button onClick={() => setMetodoPago('mix')} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${metodoPago === 'mix' ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>MIX 🔀</button>
                 </div>
 
-                {/* OPCIÓN MIXTA */}
                 {metodoPago === 'mix' && (
                   <div className="mb-4 space-y-2 bg-purple-50 p-3 rounded-2xl border border-purple-100 animate-in zoom-in duration-200">
                     <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-purple-200">
