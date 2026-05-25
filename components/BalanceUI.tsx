@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import React from 'react'
 
-// --- COMPONENTES VISUALES ---
+// --- 1. TARJETAS DE PORTADA (INGRESOS, GASTOS, SALDO) ---
 export const CardBalance = ({ titulo, monto, color, esSaldo = false }: any) => {
   const bgCulo = esSaldo 
     ? (monto >= 0 ? 'bg-green-600 border-green-800' : 'bg-red-600 border-red-800')
@@ -12,17 +12,18 @@ export const CardBalance = ({ titulo, monto, color, esSaldo = false }: any) => {
     : (color === 'red' ? 'text-red-500' : 'text-green-600');
 
   return (
-    <div className={`p-8 rounded-[2.5rem] shadow-lg transition-all ${bgCulo} ${!esSaldo && (color === 'red' ? 'border-red-500' : 'border-green-500')}`}>
-      <p className={`text-[10px] font-black uppercase mb-1 tracking-widest ${esSaldo ? 'text-white/80' : 'text-gray-400'}`}>
+    <div className={`p-8 rounded-[2.5rem] shadow-lg transition-all print:shadow-sm print:p-4 print:rounded-2xl ${bgCulo} ${!esSaldo && (color === 'red' ? 'border-red-500' : 'border-green-500')}`}>
+      <p className={`text-[10px] font-black uppercase mb-1 tracking-widest print:text-[8px] print:mb-0.5 ${esSaldo ? 'text-white/80' : 'text-gray-400'}`}>
         {titulo}
       </p>
-      <p className={`text-3xl font-black tracking-tighter italic ${textMonto}`}>
+      <p className={`text-3xl font-black tracking-tighter italic print:text-xl ${textMonto}`}>
         Bs {Number(monto).toFixed(2)}
       </p>
     </div>
   );
 };
 
+// --- 2. FILAS DE GASTOS INDIVIDUALES ---
 export const ItemGasto = ({ concepto, fecha, monto }: any) => (
   <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
     <div className="flex flex-col">
@@ -37,6 +38,7 @@ export const ItemGasto = ({ concepto, fecha, monto }: any) => (
   </div>
 );
 
+// --- 3. ANALIZADOR DE RENTABILIDAD CON RECUADRO DASHED ---
 export const IndicadorRendimiento = ({ ingresos, egresos }: { ingresos: number, egresos: number }) => {
   if (ingresos === 0) return null;
   const porcentajeGasto = (egresos / ingresos) * 100;
@@ -71,42 +73,99 @@ export const IndicadorRendimiento = ({ ingresos, egresos }: { ingresos: number, 
   );
 };
 
-// --- COMPONENTE PRINCIPAL ACTUALIZADO ---
-export default function Balance({ ventas, gastos }: any) {
-  // 1. FILTRADO CRÍTICO: Ignoramos las ventas que tengan estado 'anulado'
-  const ventasValidas = ventas.filter((v: any) => v.estado !== 'anulado');
-
-  // 2. CALCULAMOS USANDO SOLO LAS VENTAS VÁLIDAS
-  const totalIngresos = ventasValidas.reduce((acc: number, v: any) => acc + Number(v.precio_venta), 0);
-  const totalEgresos = gastos.reduce((acc: number, g: any) => acc + Number(g.monto), 0);
-  const saldoNeto = totalIngresos - totalEgresos;
-
+// --- 4. SELECTOR DE RANGOS DESDE / HASTA ---
+export function SelectorRango({ fechaInicio, setFechaInicio, fechaFin, setFechaFin, tipoFiltro, setTipoFiltro }: any) {
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-2">
-        <CardBalance titulo="Ingresos Totales" monto={totalIngresos} color="green" />
-        <CardBalance titulo="Gastos Registrados" monto={totalEgresos} color="red" />
-        <CardBalance titulo="Saldo Neto" monto={saldoNeto} esSaldo={true} />
-      </div>
-
-      <div className="mx-2">
-        <IndicadorRendimiento ingresos={totalIngresos} egresos={totalEgresos} />
-      </div>
-
-      <div className="mx-2 bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
-          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          Últimos Egresos Detallados
-        </h3>
-        <div className="space-y-3">
-          {gastos.length > 0 ? (
-            gastos.slice(0, 10).map((g: any) => (
-              <ItemGasto key={g.id} concepto={g.concepto} fecha={g.created_at} monto={g.monto} />
-            ))
-          ) : (
-            <p className="text-center text-[10px] font-bold text-gray-300 uppercase py-10">Sin gastos registrados</p>
-          )}
+    <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4 items-center justify-center print:hidden animate-fade-in mx-2">
+      {/* Inputs de Fechas */}
+      <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center">
+        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100 w-full sm:w-auto">
+          <span className="text-[9px] font-black text-gray-400 uppercase px-2">Desde:</span>
+          <input 
+            type="date" 
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+            className="bg-transparent font-black text-sm text-blue-600 outline-none"
+          />
         </div>
+        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100 w-full sm:w-auto">
+          <span className="text-[9px] font-black text-gray-400 uppercase px-2">Hasta:</span>
+          <input 
+            type="date" 
+            value={fechaFin}
+            onChange={(e) => setFechaFin(e.target.value)}
+            className="bg-transparent font-black text-sm text-blue-600 outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Selector de tipo de flujo (Todos, Ingresos, Egresos) */}
+      <div className="flex bg-gray-100 p-1 rounded-2xl gap-1">
+        {[
+          { id: 'todos', label: 'Ver Todo 📊' },
+          { id: 'ingresos', label: 'Solo Ingresos 💰' },
+          { id: 'egresos', label: 'Solo Egresos 💸' }
+        ].map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setTipoFiltro(item.id as any)}
+            className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+              tipoFiltro === item.id ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- 5. TABLA DE REPORTE CONSOLIDADO DIARIO ---
+export function TablaGananciasPorDia({ listaDias, tipoFiltro = 'todos' }: { listaDias: any[], tipoFiltro?: 'todos' | 'ingresos' | 'egresos' }) {
+  return (
+    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-gray-50 max-w-4xl mx-auto">
+      <h3 className="text-center text-[10px] font-black text-gray-300 uppercase mb-6 tracking-[0.4em] italic">
+        Ganancias Consolidadas por Día
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="py-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">Fecha</th>
+              {(tipoFiltro === 'todos' || tipoFiltro === 'ingresos') && (
+                <th className="py-4 text-[10px] font-black text-green-500 uppercase tracking-wider">Ingresos</th>
+              )}
+              {(tipoFiltro === 'todos' || tipoFiltro === 'egresos') && (
+                <th className="py-4 text-[10px] font-black text-red-500 uppercase tracking-wider">Egresos</th>
+              )}
+              <th className="py-4 text-[10px] font-black text-blue-600 uppercase tracking-wider text-right">Balance Neto</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {listaDias.map((dia) => (
+              <tr key={dia.fecha} className="hover:bg-gray-50/50 transition-colors group">
+                <td className="py-4 text-xs font-bold text-gray-700">{dia.fecha}</td>
+                
+                {(tipoFiltro === 'todos' || tipoFiltro === 'ingresos') && (
+                  <td className="py-4 text-xs font-black text-green-600">
+                    {dia.ingresos > 0 ? `+Bs ${dia.ingresos.toFixed(2)}` : `Bs 0.00`}
+                  </td>
+                )}
+                
+                {(tipoFiltro === 'todos' || tipoFiltro === 'egresos') && (
+                  <td className="py-4 text-xs font-black text-red-600">
+                    {dia.egresos > 0 ? `-Bs ${dia.egresos.toFixed(2)}` : `Bs 0.00`}
+                  </td>
+                )}
+                
+                <td className={`py-4 text-xs font-black text-right ${dia.neto >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                  {dia.neto >= 0 ? `Bs ${dia.neto.toFixed(2)}` : `-Bs ${Math.abs(dia.neto).toFixed(2)}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
