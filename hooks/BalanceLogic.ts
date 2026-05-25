@@ -6,36 +6,42 @@ export function calcularBalance(
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
-  // Las variables fechaInicio y fechaFin vienen en formato texto puro: "YYYY-MM-DD"
-  const refAnio = fechaInicio.substring(0, 4); // "2026"
-  const refMes = fechaInicio.substring(5, 7);   // "05"
+  // Aseguramos el orden correcto de los textos: fMin siempre será la menor y fMax la mayor
+  let fMin = fechaInicio;
+  let fMax = fechaFin;
+  if (fMin > fMax) {
+    fMin = fechaFin;
+    fMax = fechaInicio;
+  }
+
+  const refAnio = fMin.substring(0, 4); // "2026"
+  const refMes = fMin.substring(5, 7);   // Mes de referencia
 
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // --- 1. FUNCIÓN INTERNA ULTRA SEGURA PARA EXTRAER TEXTO "YYYY-MM-DD" ---
+  // Función limpia para cortar "YYYY-MM-DD"
   const extraerFechaTexto = (registro: any, esGasto: boolean) => {
     const campoRaw = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
     if (!campoRaw) return null;
-    return campoRaw.substring(0, 10); // Corta exactamente los primeros 10 caracteres: "YYYY-MM-DD"
+    return campoRaw.substring(0, 10);
   };
 
-  // --- 2. FILTRADO DIRECTO SIN USAR FUNCIONES EXTERNAS ---
+  // --- FILTRADO DIRECTO ---
   if (modo === 'rango') {
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
         const fStr = extraerFechaTexto(v, false);
-        return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
+        return fStr ? (fStr >= fMin && fStr <= fMax) : false;
       }) || [];
     }
     if (tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
       gF = gastos?.filter((g: any) => {
         const fStr = extraerFechaTexto(g, true);
-        return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
+        return fStr ? (fStr >= fMin && fStr <= fMax) : false;
       }) || [];
     }
   } else {
-    // MODOS SEMANAL, MENSUAL, ANUAL
     const filtrarPorModo = (registro: any, esGasto: boolean) => {
       const fStr = extraerFechaTexto(registro, esGasto);
       if (!fStr) return false;
@@ -47,10 +53,10 @@ export function calcularBalance(
         return regAnio === refAnio && regMes === refMes;
       }
       if (modo === 'anual') {
-        return regAnio === refAnio; // Trae todo el año 2026 completo
+        return regAnio === refAnio;
       }
       if (modo === 'semanal') {
-        return fStr <= fechaInicio && fStr >= fechaFin;
+        return fStr >= fMin && fStr <= fMax;
       }
       return true;
     };
@@ -59,18 +65,18 @@ export function calcularBalance(
     gF = gastos?.filter((g: any) => filtrarPorModo(g, true)) || [];
   }
 
-  // --- 3. SUMATORIAS DE TARJETAS ---
+  // --- SUMATORIAS ---
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- 4. AGRUPACIÓN PARA LA TABLA ---
+  // --- AGRUPACIÓN POR DÍA ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
   vF.forEach((v: any) => {
     const fStr = extraerFechaTexto(v, false);
     if (fStr) {
       const [y, m, d] = fStr.split('-');
-      const fechaFormateada = `${d}/${m}/${y}`; // Pasa a formato "DD/MM/YYYY" para la tabla
+      const fechaFormateada = `${d}/${m}/${y}`;
       if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
       gananciasPorDia[fechaFormateada].ingresos += Number(v.precio_venta || 0);
     }
@@ -94,7 +100,7 @@ export function calcularBalance(
   })).sort((a, b) => {
     const dataA = a.fecha.split('/').reverse().join('-');
     const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA); // Las fechas más nuevas primero
+    return dataB.localeCompare(dataA);
   });
 
   return { ingresos, egresos, listaDias, gF };
