@@ -7,51 +7,40 @@ export default function Balance({ ventas, gastos }: any) {
   const anioActual = new Date().getFullYear()
   const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
 
-  // Estados de control de fechas
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
   
   const [modo, setModo] = useState<'semanal' | 'mensual' | 'anual' | 'rango'>('semanal')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'ingresos' | 'egresos'>('todos')
 
-  // Manejador del cambio de modo optimizado
   const cambiarModo = (nuevoModo: 'semanal' | 'mensual' | 'anual' | 'rango') => {
     setModo(nuevoModo)
     if (nuevoModo === 'rango') {
-      // Configuramos el rango expandido correctamente de menor a mayor
-      setFechaInicio(`${anioActual}-01-01`) // Desde el 1 de enero
-      setFechaFin(hoyFormateado)            // Hasta hoy
+      setFechaInicio(`${anioActual}-01-01`)
+      setFechaFin(hoyFormateado)
     } else {
-      // Para los otros modos, regresamos a la fecha de referencia de hoy
       setFechaInicio(hoyFormateado)
       setFechaFin(hoyFormateado)
     }
   }
 
-  // Filtrado de anulados instantáneo
   const ventasValidas = useMemo(() => {
     return ventas?.filter((v: any) => v.estado !== 'anulado') || [];
   }, [ventas]);
 
-  // Modificamos temporalmente los parámetros según el modo para que la lógica de texto responda bien
-// Modificamos temporalmente los parámetros según el modo para que la lógica de texto responda bien
   const data = useMemo(() => {
     let fInicio = fechaInicio
     let fFin = fechaFin
 
     if (modo === 'semanal') {
-      // 1. Tomamos la fecha de referencia elegida en la interfaz
       const fechaRef = new Date(fechaInicio + 'T00:00:00')
-      const diaSemana = fechaRef.getDay() // 0 = Domingo, 1 = Lunes, etc.
-      
-      // 2. Calculamos cuántos días restar para llegar al lunes de ESTA semana
-      // Si es domingo (0), restamos 6 días. Si es otro día, restamos (diaSemana - 1)
+      const diaSemana = fechaRef.getDay()
       const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1
-      
       const lunesActual = new Date(fechaRef.getTime() - diasHastaLunes * 24 * 60 * 60 * 1000)
       
-      fFin = lunesActual.toLocaleDateString('sv-SE') // La fecha del lunes actual va a fFin
-      // fInicio sigue siendo la fecha de referencia (hoy)
+      // Forzamos el orden de la semana: de lunes a hoy
+      fInicio = lunesActual.toLocaleDateString('sv-SE')
+      fFin = fechaInicio
     }
 
     return calcularBalance(ventasValidas, gastos, modo, fInicio, fFin, tipoFiltro);
@@ -67,7 +56,6 @@ export default function Balance({ ventas, gastos }: any) {
         }
       `}</style>
       
-      {/* MENÚ SUPERIOR DE MODOS */}
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 print:hidden mx-2">
         <div className="flex bg-gray-100 p-1 rounded-2xl flex-wrap gap-1">
           {['semanal', 'mensual', 'anual', 'rango'].map((m) => (
@@ -108,7 +96,6 @@ export default function Balance({ ventas, gastos }: any) {
         </div>
       </div>
 
-      {/* ENCABEZADO PARA IMPRESIÓN PDF */}
       <div className="hidden print:block border-b-2 border-gray-200 pb-4 mb-6 text-center">
         <h1 className="text-2xl font-black text-gray-800 uppercase tracking-widest">SPINACH RESTAURANT</h1>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Reporte Consolidado de Balance de Caja</p>
@@ -118,19 +105,16 @@ export default function Balance({ ventas, gastos }: any) {
         </p>
       </div>
 
-      {/* FILA DE LAS 3 TARJETAS */}
       <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 px-2 print:px-0">
         <CardBalance titulo={`Ingresos ${modo}`} monto={data.ingresos} color="green" />
         <CardBalance titulo={`Gastos ${modo}`} monto={data.egresos} color="red" />
         <CardBalance titulo="Saldo Neto" monto={data.ingresos - data.egresos} esSaldo={true} />
       </div>
 
-      {/* ANALIZADOR DE RENTABILIDAD */}
       <div className="mx-2 print:hidden">
         <IndicadorRendimiento ingresos={data.ingresos} egresos={data.egresos} />
       </div>
 
-      {/* MOSTRAR SELECTOR EXTENDIDO EN RANGO */}
       {modo === 'rango' && (
         <SelectorRango 
           fechaInicio={fechaInicio} setFechaInicio={setFechaInicio}
@@ -139,12 +123,10 @@ export default function Balance({ ventas, gastos }: any) {
         />
       )}
 
-      {/* TABLA DEL REPORTE */}
       <div className="mx-2 print:mx-0">
         <TablaGananciasPorDia listaDias={data.listaDias} tipoFiltro={tipoFiltro} />
       </div>
 
-      {/* DETALLE DE EGRESOS INDIVIDUALES */}
       <div className="mx-2 bg-white p-8 rounded-[3rem] shadow-sm border border-gray-50 print:hidden">
         <h3 className="text-center text-[10px] font-black text-gray-300 uppercase mb-6 tracking-[0.4em] italic">
           Detalle de Egresos - Individuales ({modo})
