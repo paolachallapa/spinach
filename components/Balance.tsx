@@ -7,34 +7,54 @@ export default function Balance({ ventas, gastos }: any) {
   const anioActual = new Date().getFullYear()
   const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
 
-  // Estado único de fechas de control
+  // Estados de control de fechas
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
   
   const [modo, setModo] = useState<'semanal' | 'mensual' | 'anual' | 'rango'>('semanal')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'ingresos' | 'egresos'>('todos')
 
-  // Manejador del cambio de modo para reconfigurar las fechas automáticas
+  // Manejador del cambio de modo optimizado
   const cambiarModo = (nuevoModo: 'semanal' | 'mensual' | 'anual' | 'rango') => {
     setModo(nuevoModo)
     if (nuevoModo === 'rango') {
-      // Si elige Rango, expandimos el inicio al 1 de enero para traer marzo, abril y mayo de golpe
-      setFechaInicio(`${anioActual}-01-01`)
-      setFechaFin(hoyFormateado)
+      // Configuramos el rango expandido correctamente de menor a mayor
+      setFechaInicio(`${anioActual}-01-01`) // Desde el 1 de enero
+      setFechaFin(hoyFormateado)            // Hasta hoy
     } else {
-      // Si vuelve a semanal, mensual o anual, la fecha de referencia vuelve a ser hoy
+      // Para los otros modos, regresamos a la fecha de referencia de hoy
       setFechaInicio(hoyFormateado)
       setFechaFin(hoyFormateado)
     }
   }
 
+  // Filtrado de anulados instantáneo
   const ventasValidas = useMemo(() => {
     return ventas?.filter((v: any) => v.estado !== 'anulado') || [];
   }, [ventas]);
 
-  // Ejecución de la lógica matemática compartida
+  // Modificamos temporalmente los parámetros según el modo para que la lógica de texto responda bien
+// Modificamos temporalmente los parámetros según el modo para que la lógica de texto responda bien
   const data = useMemo(() => {
-    return calcularBalance(ventasValidas, gastos, modo, fechaInicio, fechaFin, tipoFiltro);
+    let fInicio = fechaInicio
+    let fFin = fechaFin
+
+    if (modo === 'semanal') {
+      // 1. Tomamos la fecha de referencia elegida en la interfaz
+      const fechaRef = new Date(fechaInicio + 'T00:00:00')
+      const diaSemana = fechaRef.getDay() // 0 = Domingo, 1 = Lunes, etc.
+      
+      // 2. Calculamos cuántos días restar para llegar al lunes de ESTA semana
+      // Si es domingo (0), restamos 6 días. Si es otro día, restamos (diaSemana - 1)
+      const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1
+      
+      const lunesActual = new Date(fechaRef.getTime() - diasHastaLunes * 24 * 60 * 60 * 1000)
+      
+      fFin = lunesActual.toLocaleDateString('sv-SE') // La fecha del lunes actual va a fFin
+      // fInicio sigue siendo la fecha de referencia (hoy)
+    }
+
+    return calcularBalance(ventasValidas, gastos, modo, fInicio, fFin, tipoFiltro);
   }, [ventasValidas, gastos, modo, fechaInicio, fechaFin, tipoFiltro]);
 
   return (
@@ -88,7 +108,7 @@ export default function Balance({ ventas, gastos }: any) {
         </div>
       </div>
 
-      {/* ENCABEZADO CENTRADO PARA IMPRESIÓN PDF */}
+      {/* ENCABEZADO PARA IMPRESIÓN PDF */}
       <div className="hidden print:block border-b-2 border-gray-200 pb-4 mb-6 text-center">
         <h1 className="text-2xl font-black text-gray-800 uppercase tracking-widest">SPINACH RESTAURANT</h1>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Reporte Consolidado de Balance de Caja</p>
