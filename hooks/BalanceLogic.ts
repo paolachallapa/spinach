@@ -6,7 +6,7 @@ export function calcularBalance(
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
-  // Aseguramos el orden correcto de los textos: fMin siempre será la menor y fMax la mayor
+  // Aseguramos que fMin sea siempre la menor y fMax la mayor cromáticamente
   let fMin = fechaInicio;
   let fMax = fechaFin;
   if (fMin > fMax) {
@@ -14,20 +14,21 @@ export function calcularBalance(
     fMax = fechaInicio;
   }
 
-  const refAnio = fMin.substring(0, 4); // "2026"
-  const refMes = fMin.substring(5, 7);   // Mes de referencia
+  // Extraemos año y mes de control basados en el string "YYYY-MM-DD"
+  const refAnio = fMin.substring(0, 4); 
+  const refMes = fMin.substring(5, 7);   
 
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // Función limpia para cortar "YYYY-MM-DD"
+  // Función ultra limpia para extraer texto puro "YYYY-MM-DD"
   const extraerFechaTexto = (registro: any, esGasto: boolean) => {
     const campoRaw = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
     if (!campoRaw) return null;
-    return campoRaw.substring(0, 10);
+    return campoRaw.substring(0, 10); // Corta "YYYY-MM-DD"
   };
 
-  // --- FILTRADO DIRECTO ---
+  // --- FILTRADO SEGURO ---
   if (modo === 'rango') {
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
@@ -69,39 +70,36 @@ export function calcularBalance(
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- AGRUPACIÓN POR DÍA ---
+  // --- AGRUPACIÓN PARA LA TABLA ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
   vF.forEach((v: any) => {
     const fStr = extraerFechaTexto(v, false);
     if (fStr) {
-      const [y, m, d] = fStr.split('-');
-      const fechaFormateada = `${d}/${m}/${y}`;
-      if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
-      gananciasPorDia[fechaFormateada].ingresos += Number(v.precio_venta || 0);
+      if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
+      gananciasPorDia[fStr].ingresos += Number(v.precio_venta || 0);
     }
   });
 
   gF.forEach((g: any) => {
     const fStr = extraerFechaTexto(g, true);
     if (fStr) {
-      const [y, m, d] = fStr.split('-');
-      const fechaFormateada = `${d}/${m}/${y}`;
-      if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
-      gananciasPorDia[fechaFormateada].egresos += Number(g.monto || 0);
+      if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
+      gananciasPorDia[fStr].egresos += Number(g.monto || 0);
     }
   });
 
-  const listaDias = Object.keys(gananciasPorDia).map((fecha) => ({
-    fecha,
-    ingresos: gananciasPorDia[fecha].ingresos,
-    egresos: gananciasPorDia[fecha].egresos,
-    neto: gananciasPorDia[fecha].ingresos - gananciasPorDia[fecha].egresos
-  })).sort((a, b) => {
-    const dataA = a.fecha.split('/').reverse().join('-');
-    const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA);
-  });
+  // Convertimos las llaves "YYYY-MM-DD" a formato visual "DD/MM/YYYY" SOLO al renderizar la lista final
+  const listaDias = Object.keys(gananciasPorDia).map((fStr) => {
+    const [y, m, d] = fStr.split('-');
+    return {
+      fecha: `${d}/${m}/${y}`, // Formato visual para la tabla de la UI
+      fechaRaw: fStr,          // Guardamos el original para ordenar
+      ingresos: gananciasPorDia[fStr].ingresos,
+      egresos: gananciasPorDia[fStr].egresos,
+      neto: gananciasPorDia[fStr].ingresos - gananciasPorDia[fStr].egresos
+    };
+  }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw)); // Ordenación exacta por texto ISO
 
   return { ingresos, egresos, listaDias, gF };
 }
