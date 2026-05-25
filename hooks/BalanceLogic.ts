@@ -6,14 +6,16 @@ export function calcularBalance(
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
-  // Creamos la fecha de referencia de hoy de forma limpia
-  const hoy = new Date(fechaInicio + 'T00:00:00');
-  
+  // fechaInicio y fechaFin vienen en formato "YYYY-MM-DD"
+  const refAnio = fechaInicio.substring(0, 4); // "2026"
+  const refMes = fechaInicio.substring(5, 7);   // "05" (Mayo, por ejemplo)
+
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // --- LÓGICA DE FILTRADO MEJORADA ---
+  // --- 1. FILTRADO ULTRA-SEGURO POR TEXTO DIRECTO ---
   if (modo === 'rango') {
+    // Para rango usamos objetos Date estables con marcas de tiempo manuales
     const inicioRango = new Date(fechaInicio + 'T00:00:00');
     const finRango = new Date(fechaFin + 'T23:59:59');
     
@@ -25,63 +27,73 @@ export function calcularBalance(
     }
     if (tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
       gF = gastos?.filter((g: any) => {
-        const f = new Date(g.created_at || g.creado_at);
+        const f = new Date(g.created_at || g.created_at);
         return f >= inicioRango && f <= finRango;
       }) || [];
     }
   } else {
-    // Para modos normales, evaluamos individualmente cada registro sin romper el flujo
-    const filtrarPorModo = (fechaStr: string) => {
-      const f = new Date(fechaStr);
+    // MODOS NORMALES: Extraemos el año, mes o día directamente desde el texto del registro
+    const filtrarPorModoTexto = (fechaRegistroStr: string) => {
+      if (!fechaRegistroStr) return false;
       
-      if (modo === 'semanal') {
-        // 7 días atrás a partir de la fecha de referencia
-        const sieteDiasAtras = new Date(hoy);
-        sieteDiasAtras.setDate(hoy.getDate() - 7);
-        return f >= sieteDiasAtras && f <= new Date(fechaInicio + 'T23:59:59');
-      }
-      
+      // Convertimos el ISO String ("2026-04-15T18:30:00.000Z") a "YYYY-MM-DD" puro
+      const fechaLimpia = fechaRegistroStr.substring(0, 10); 
+      const regAnio = fechaLimpia.substring(0, 4);
+      const regMes = fechaLimpia.substring(5, 7);
+
       if (modo === 'mensual') {
-        // Trae todo lo que corresponda al mismo mes y año de la fecha de referencia
-        return f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
+        // Coincidencia exacta de Año y Mes (ej: "2026" y "04" para Abril)
+        return regAnio === refAnio && regMes === refMes;
       }
       
       if (modo === 'anual') {
-        // ¡TRAE TODO EL AÑO COMPLETO! Al estar en 2026, te incluirá marzo, abril y mayo juntos
-        return f.getFullYear() === hoy.getFullYear();
+        // Coincidencia exacta de Año (ej: "2026"). ¡Traerá marzo, abril, mayo, etc.!
+        return regAnio === refAnio;
+      }
+      
+      if (modo === 'semanal') {
+        // 7 días atrás de forma segura usando timestamps estables
+        const fRef = new Date(fechaInicio + 'T23:59:59');
+        const fSieteDiasAtras = new Date(fechaInicio + 'T00:00:00');
+        fSieteDiasAtras.setDate(fSieteDiasAtras.getDate() - 7);
+        
+        const fReg = new Date(fechaLimpia + 'T12:00:00');
+        return fReg >= fSieteDiasAtras && fReg <= fRef;
       }
       
       return true;
     };
 
-    vF = ventas?.filter((v: any) => filtrarPorModo(v.creado_at || v.created_at)) || [];
-    gF = gastos?.filter((g: any) => filtrarPorModo(g.created_at || g.creado_at)) || [];
+    vF = ventas?.filter((v: any) => filtrarPorModoTexto(v.creado_at || v.created_at)) || [];
+    gF = gastos?.filter((g: any) => filtrarPorModoTexto(g.created_at || g.created_at)) || [];
   }
 
-  // --- CÁLCULO DE TOTALES ---
+  // --- 2. CÁLCULO DE TOTALES EN TARJETAS ---
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- CONSTRUCCIÓN DE LA TABLA POR DÍA (RESPETA EL FILTRO EN CUALQUIER MODO) ---
+  // --- 3. CONSTRUCCIÓN CONSOLIDADA DE LA TABLA POR DÍAS ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
   if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
     vF.forEach((v: any) => {
-      const fechaClave = new Date(v.creado_at || v.created_at).toLocaleDateString('es-ES', {
-        day: '2-digit', month: '2-digit', year: 'numeric'
-      });
-      if (!gananciasPorDia[fechaClave]) gananciasPorDia[fechaClave] = { ingresos: 0, egresos: 0 };
-      gananciasPorDia[fechaClave].ingresos += Number(v.precio_venta || 0);
+      const ISO = (v.creado_at || v.created_at).substring(0, 10); // "YYYY-MM-DD"
+      const [y, m, d] = ISO.split('-');
+      const fechaFormateada = `${d}/${m}/${y}`; // Convertimos a "DD/MM/YYYY" para la vista
+      
+      if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
+      gananciasPorDia[fechaFormateada].ingresos += Number(v.precio_venta || 0);
     });
   }
 
   if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
     gF.forEach((g: any) => {
-      const fechaClave = new Date(g.created_at || g.creado_at).toLocaleDateString('es-ES', {
-        day: '2-digit', month: '2-digit', year: 'numeric'
-      });
-      if (!gananciasPorDia[fechaClave]) gananciasPorDia[fechaClave] = { ingresos: 0, egresos: 0 };
-      gananciasPorDia[fechaClave].egresos += Number(g.monto || 0);
+      const ISO = (g.created_at || g.creado_at).substring(0, 10);
+      const [y, m, d] = ISO.split('-');
+      const fechaFormateada = `${d}/${m}/${y}`;
+      
+      if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
+      gananciasPorDia[fechaFormateada].egresos += Number(g.monto || 0);
     });
   }
 
@@ -91,9 +103,10 @@ export function calcularBalance(
     egresos: gananciasPorDia[fecha].egresos,
     neto: gananciasPorDia[fecha].ingresos - gananciasPorDia[fecha].egresos
   })).sort((a, b) => {
+    // Ordenar de manera estable: el más reciente arriba del todo
     const dataA = a.fecha.split('/').reverse().join('-');
     const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA); // Orden descendente (más nuevo arriba)
+    return dataB.localeCompare(dataA);
   });
 
   return { ingresos, egresos, listaDias, gF };
