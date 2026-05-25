@@ -1,101 +1,91 @@
 export function calcularBalance(
   ventas: any[], 
   gastos: any[], 
-  modo: 'semanal' | 'mensual' | 'anual' | 'rango', 
+  modo: string, 
   fechaInicio: string, 
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
   // fechaInicio y fechaFin vienen en formato "YYYY-MM-DD"
   const refAnio = fechaInicio.substring(0, 4); // "2026"
-  const refMes = fechaInicio.substring(5, 7);   // "05" (Mayo, por ejemplo)
+  const refMes = fechaInicio.substring(5, 7);   // "05" (Mayo)
 
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // --- 1. FILTRADO ULTRA-SEGURO POR TEXTO DIRECTO ---
+  // --- 1. FILTRADO SEGURO POR TEXTO PLANO ---
+  const extraerFechaLimpia = (registro: any, esGasto: boolean) => {
+    // Forzamos la lectura del campo exacto de Supabase
+    const campoFecha = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
+    if (!campoFecha) return null;
+    // Retorna los primeros 10 caracteres: "YYYY-MM-DD"
+    return campoFecha.substring(0, 10);
+  };
+
   if (modo === 'rango') {
-    // Para rango usamos objetos Date estables con marcas de tiempo manuales
-    const inicioRango = new Date(fechaInicio + 'T00:00:00');
-    const finRango = new Date(fechaFin + 'T23:59:59');
-    
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
-        const f = new Date(v.creado_at || v.created_at);
-        return f >= inicioRango && f <= finRango;
+        const fStr = extraerFechaLimpia(v, false);
+        return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
       }) || [];
     }
     if (tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
       gF = gastos?.filter((g: any) => {
-        const f = new Date(g.created_at || g.created_at);
-        return f >= inicioRango && f <= finRango;
+        const fStr = extraerFechaLimpia(g, true);
+        return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
       }) || [];
     }
   } else {
-    // MODOS NORMALES: Extraemos el año, mes o día directamente desde el texto del registro
-    const filtrarPorModoTexto = (fechaRegistroStr: string) => {
-      if (!fechaRegistroStr) return false;
-      
-      // Convertimos el ISO String ("2026-04-15T18:30:00.000Z") a "YYYY-MM-DD" puro
-      const fechaLimpia = fechaRegistroStr.substring(0, 10); 
+    const filtrarPorModoTexto = (registro: any, esGasto: boolean) => {
+      const fechaLimpia = extraerFechaLimpia(registro, esGasto);
+      if (!fechaLimpia) return false;
+
       const regAnio = fechaLimpia.substring(0, 4);
       const regMes = fechaLimpia.substring(5, 7);
 
       if (modo === 'mensual') {
-        // Coincidencia exacta de Año y Mes (ej: "2026" y "04" para Abril)
         return regAnio === refAnio && regMes === refMes;
       }
-      
       if (modo === 'anual') {
-        // Coincidencia exacta de Año (ej: "2026"). ¡Traerá marzo, abril, mayo, etc.!
-        return regAnio === refAnio;
+        return regAnio === refAnio; // Trae todo el 2026 completo (marzo, abril, mayo)
       }
-      
       if (modo === 'semanal') {
-        // 7 días atrás de forma segura usando timestamps estables
-        const fRef = new Date(fechaInicio + 'T23:59:59');
-        const fSieteDiasAtras = new Date(fechaInicio + 'T00:00:00');
-        fSieteDiasAtras.setDate(fSieteDiasAtras.getDate() - 7);
-        
-        const fReg = new Date(fechaLimpia + 'T12:00:00');
-        return fReg >= fSieteDiasAtras && fReg <= fRef;
+        // Filtro rápido de 7 días hacia atrás usando strings
+        return fechaLimpia <= fechaInicio && fechaLimpia >= fechaFin;
       }
-      
       return true;
     };
 
-    vF = ventas?.filter((v: any) => filtrarPorModoTexto(v.creado_at || v.created_at)) || [];
-    gF = gastos?.filter((g: any) => filtrarPorModoTexto(g.created_at || g.created_at)) || [];
+    vF = ventas?.filter((v: any) => filtrarPorModoTexto(v, false)) || [];
+    gF = gastos?.filter((g: any) => filtrarPorModoTexto(g, true)) || [];
   }
 
-  // --- 2. CÁLCULO DE TOTALES EN TARJETAS ---
+  // --- 2. CÁLCULO DE TOTALES ---
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- 3. CONSTRUCCIÓN CONSOLIDADA DE LA TABLA POR DÍAS ---
+  // --- 3. CONSTRUCCIÓN DE LA TABLA POR DÍAS (Soporta formatos sin la 'T') ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
-  if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
-    vF.forEach((v: any) => {
-      const ISO = (v.creado_at || v.created_at).substring(0, 10); // "YYYY-MM-DD"
-      const [y, m, d] = ISO.split('-');
-      const fechaFormateada = `${d}/${m}/${y}`; // Convertimos a "DD/MM/YYYY" para la vista
-      
+  vF.forEach((v: any) => {
+    const fStr = extraerFechaLimpia(v, false);
+    if (fStr) {
+      const [y, m, d] = fStr.split('-');
+      const fechaFormateada = `${d}/${m}/${y}`; // Convierte a DD/MM/YYYY
       if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
       gananciasPorDia[fechaFormateada].ingresos += Number(v.precio_venta || 0);
-    });
-  }
+    }
+  });
 
-  if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
-    gF.forEach((g: any) => {
-      const ISO = (g.created_at || g.creado_at).substring(0, 10);
-      const [y, m, d] = ISO.split('-');
+  gF.forEach((g: any) => {
+    const fStr = extraerFechaLimpia(g, true);
+    if (fStr) {
+      const [y, m, d] = fStr.split('-');
       const fechaFormateada = `${d}/${m}/${y}`;
-      
       if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
       gananciasPorDia[fechaFormateada].egresos += Number(g.monto || 0);
-    });
-  }
+    }
+  });
 
   const listaDias = Object.keys(gananciasPorDia).map((fecha) => ({
     fecha,
@@ -103,10 +93,9 @@ export function calcularBalance(
     egresos: gananciasPorDia[fecha].egresos,
     neto: gananciasPorDia[fecha].ingresos - gananciasPorDia[fecha].egresos
   })).sort((a, b) => {
-    // Ordenar de manera estable: el más reciente arriba del todo
     const dataA = a.fecha.split('/').reverse().join('-');
     const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA);
+    return dataB.localeCompare(dataA); // Ordenar: Más reciente arriba
   });
 
   return { ingresos, egresos, listaDias, gF };
