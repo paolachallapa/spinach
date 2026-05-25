@@ -25,15 +25,27 @@ export default function Home() {
   const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false)
 
   // Función de carga masiva corregida y optimizada
+  // Función de carga masiva corregida para soportar alto volumen de ventas
   const cargarDatos = async () => {
     const anioActual = new Date().getFullYear();
-    const inicioAnio = `${anioActual}-01-01T00:00:00.000Z`;
+    const inicioAnio = `${anioActual}-01-01T00:00:00Z`;
 
-    // Ejecutamos las consultas en paralelo para máxima velocidad
+    // Ejecutamos las consultas en paralelo pidiendo un rango amplio (ej. 20,000 filas)
+    // Esto evita que Supabase corte la descarga al llegar a las 1000 filas por defecto
     const [resProductos, resVentas, resGastos] = await Promise.all([
       supabase.from('productos').select('*').order('nombre'),
-      supabase.from('ventas').select('*').gte('creado_at', inicioAnio).order('creado_at', { ascending: false }),
-      supabase.from('gastos').select('*').gte('created_at', inicioAnio).order('created_at', { ascending: false })
+      
+      supabase.from('ventas')
+        .select('*')
+        .gte('creado_at', inicioAnio)
+        .order('creado_at', { ascending: false })
+        .range(0, 20000), // 👈 AQUÍ: Forzamos a traer hasta 20,000 ventas del año
+        
+      supabase.from('gastos')
+        .select('*')
+        .gte('created_at', inicioAnio)
+        .order('created_at', { ascending: false })
+        .range(0, 5000)   // 👈 AQUÍ: Forzamos a traer hasta 5,000 gastos
     ]);
     
     if (resProductos.data) setProductos(resProductos.data)
