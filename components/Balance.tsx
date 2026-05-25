@@ -5,7 +5,7 @@ import { CardBalance, ItemGasto, IndicadorRendimiento, SelectorRango, TablaGanan
 
 export default function Balance({ ventas, gastos }: any) {
   const anioActual = new Date().getFullYear()
-  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
+  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // Genera exactamente "2026-05-25"
 
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
@@ -38,7 +38,6 @@ export default function Balance({ ventas, gastos }: any) {
       const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1
       const lunesActual = new Date(fechaRef.getTime() - diasHastaLunes * 24 * 60 * 60 * 1000)
       
-      // Forzamos el orden de la semana: de lunes a hoy
       fInicio = lunesActual.toLocaleDateString('sv-SE')
       fFin = fechaInicio
     }
