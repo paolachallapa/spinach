@@ -9,7 +9,6 @@ import Gastos from '@/components/Gastos/Gastos'
 import Balance from '@/components/Balance'
 import Personal from '@/components/Personal'
 import LoginPage from './login/page'
-// IMPORTAMOS EL NUEVO COMPONENTE DE PEDIDOS YA
 import PanelPedidosYa from '@/components/PanelPedidosYa'
 import ModalPassword from '@/components/ui/ModalPassword'
 
@@ -25,14 +24,21 @@ export default function Home() {
 
   const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false)
 
+  // Función de carga masiva corregida y optimizada
   const cargarDatos = async () => {
-    const { data: p } = await supabase.from('productos').select('*').order('nombre')
-    const { data: v } = await supabase.from('ventas').select('*').order('creado_at', { ascending: false })
-    const { data: g } = await supabase.from('gastos').select('*').order('created_at', { ascending: false })
+    const anioActual = new Date().getFullYear();
+    const inicioAnio = `${anioActual}-01-01T00:00:00.000Z`;
+
+    // Ejecutamos las consultas en paralelo para máxima velocidad
+    const [resProductos, resVentas, resGastos] = await Promise.all([
+      supabase.from('productos').select('*').order('nombre'),
+      supabase.from('ventas').select('*').gte('creado_at', inicioAnio).order('creado_at', { ascending: false }),
+      supabase.from('gastos').select('*').gte('created_at', inicioAnio).order('created_at', { ascending: false })
+    ]);
     
-    if (p) setProductos(p)
-    if (v) setVentas([...v])
-    if (g) setGastos([...g])
+    if (resProductos.data) setProductos(resProductos.data)
+    if (resVentas.data) setVentas([...resVentas.data])
+    if (resGastos.data) setGastos([...resGastos.data])
   }
 
   const cambiarPassword = () => {
@@ -49,6 +55,7 @@ export default function Home() {
     }
   }
 
+  // CORRECCIÓN AQUÍ: Quitamos 'vista' de las dependencias para evitar peticiones duplicadas innecesarias
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -61,7 +68,8 @@ export default function Home() {
           .eq('id', session.user.id)
           .single()
         setPerfil(data)
-        cargarDatos()
+        // Cargamos todo el histórico del año al validar la sesión
+        await cargarDatos()
       }
       setCargando(false)
     }
@@ -74,7 +82,7 @@ export default function Home() {
     })
 
     return () => subscription.unsubscribe()
-  }, [vista])
+  }, []) // 👈 Lista de dependencias vacía para que se ejecute solo al montar el componente
 
   const cerrarSesion = async () => {
     await supabase.auth.signOut()
@@ -96,7 +104,6 @@ export default function Home() {
     return <LoginPage />
   }
 
-  // --- FILTRADO DE VENTAS PARA CÁLCULOS REALES ---
   const ventasValidas = ventas.filter((v: any) => v.estado !== 'anulado');
 
   return (
@@ -156,22 +163,17 @@ export default function Home() {
         </div>
       </header>
 
+      <header className="bg-white shadow-md mb-4 sticky top-0 z-50 print:hidden text-center p-4">
+        {/* Tu barra de navegación intacta */}
+      </header>
+
       <main className="max-w-5xl mx-auto px-2">
-        {/* Usamos ventasValidas para que no sume los anulados en el stock del menú */}
         {vista === 'menu' && <Menu productos={productos} ventas={ventasValidas} alTerminar={cargarDatos} />}
-        
         {vista === 'pya' && perfil?.rol === 'admin' && <PanelPedidosYa ventas={ventasValidas} alTerminar={cargarDatos} />}
-        
         {vista === 'gastos' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Gastos gastos={gastos} alTerminar={cargarDatos} />}
-        
-        {/* BALANCE Y REPORTES YA NO SUMARÁN LAS VENTAS ANULADAS */}
         {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas} gastos={gastos} />}
-        
         {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} productos={productos} />}
-        
-        {/* EN EL HISTORIAL PASAMOS TODAS LAS VENTAS PARA PODER VER CUÁLES SE ANULARON */}
         {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} perfilUsuario={perfil} />}
-        
         {vista === 'admin' && <Gestion productos={productos} alTerminar={cargarDatos} />}
         {vista === 'personal' && perfil?.rol === 'admin' && <Personal />}
       </main>
