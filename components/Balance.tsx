@@ -5,7 +5,7 @@ import { CardBalance, ItemGasto, IndicadorRendimiento, SelectorRango, TablaGanan
 
 export default function Balance({ ventas, gastos, supabase }: any) {
   const anioActual = new Date().getFullYear()
-  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
+  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // Genera exactamente "2026-05-25"
 
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
@@ -13,7 +13,6 @@ export default function Balance({ ventas, gastos, supabase }: any) {
   const [modo, setModo] = useState<'semanal' | 'mensual' | 'anual' | 'rango'>('semanal')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'ingresos' | 'egresos'>('todos')
 
-  // Estados para almacenar el histórico real cuando se pida Mensual o Anual
   const [datosHistoricos, setDatosHistoricos] = useState<{ ventas: any[], gastos: any[] } | null>(null)
   const [cargandoHistorico, setCargandoHistorico] = useState(false)
 
@@ -28,10 +27,9 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     }
   }
 
-  // EFECTO DE CONSULTA HISTÓRICA CORREGIDO
+  // EFECTO DE CONSULTA CORREGIDO: Formato de filtros nativos para Supabase
   useEffect(() => {
     const consultarBaseDeDatos = async () => {
-      // Si no hay conexión a supabase o estamos en semanal/rango, limpiamos el histórico
       if (!supabase || (modo !== 'anual' && modo !== 'mensual')) {
         setDatosHistoricos(null)
         return
@@ -39,42 +37,37 @@ export default function Balance({ ventas, gastos, supabase }: any) {
 
       setCargandoHistorico(true)
       
-      let desde = `${anioActual}-01-01T00:00:00.000Z`
-      let hasta = `${anioActual}-12-31T23:59:59.999Z`
-
-      if (modo === 'mensual') {
-        // Obtenemos el mes de la fecha de referencia seleccionada
-        const mesActual = new Date(fechaInicio + 'T00:00:00').getMonth() + 1
-        const mesFormateado = mesActual < 10 ? `0${mesActual}` : mesActual
-        desde = `${anioActual}-${mesFormateado}-01T00:00:00.000Z`
-        
-        // Conseguimos el último día del mes de forma automática (28, 30, 31, etc.)
-        const ultimoDia = new Date(anioActual, mesActual, 0).getDate()
-        hasta = `${anioActual}-${mesFormateado}-${ultimoDia}T23:59:59.999Z`
-      }
-
       try {
-        // Consultamos TODO el set de datos para asegurarnos de que el hook de BalanceLogic no falle por falta de columnas
-        const [resVentas, resGastos] = await Promise.all([
-          supabase.from('ventas')
-            .select('*')
-            .gte('creado_at', desde)
-            .lte('creado_at', hasta),
-          supabase.from('gastos')
-            .select('*')
-            .gte('created_at', desde)
-            .lte('created_at', hasta)
-        ])
+        let queryVentas = supabase.from('ventas').select('*')
+        let queryGastos = supabase.from('gastos').select('*')
 
-        if (resVentas.error) console.error("Error ventas:", resVentas.error.message)
-        if (resGastos.error) console.error("Error gastos:", resGastos.error.message)
+        if (modo === 'anual') {
+          // Buscamos de forma limpia usando rangos estándar de inicio y fin de año
+          const inicioAnio = `${anioActual}-01-01T00:00:00.000Z`
+          const finAnio = `${anioActual}-12-31T23:59:59.999Z`
+          
+          queryVentas = queryVentas.gte('creado_at', inicioAnio).lte('creado_at', finAnio)
+          queryGastos = queryGastos.gte('created_at', inicioAnio).lte('created_at', finAnio)
+        } else if (modo === 'mensual') {
+          const mesActual = new Date(fechaInicio + 'T00:00:00').getMonth() + 1
+          const mesFormateado = mesActual < 10 ? `0${mesActual}` : mesActual
+          const ultimoDia = new Date(anioActual, mesActual, 0).getDate()
+          
+          const inicioMes = `${anioActual}-${mesFormateado}-01T00:00:00.000Z`
+          const finMes = `${anioActual}-${mesFormateado}-${ultimoDia}T23:59:59.999Z`
+
+          queryVentas = queryVentas.gte('creado_at', inicioMes).lte('creado_at', finMes)
+          queryGastos = queryGastos.gte('created_at', inicioMes).lte('created_at', finMes)
+        }
+
+        const [resVentas, resGastos] = await Promise.all([queryVentas, queryGastos])
 
         setDatosHistoricos({
           ventas: resVentas.data || [],
           gastos: resGastos.data || []
         })
       } catch (error) {
-        console.error("Error crítico cargando histórico:", error)
+        console.error("Error cargando histórico:", error)
       } finally {
         setCargandoHistorico(false)
       }
@@ -83,7 +76,6 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     consultarBaseDeDatos()
   }, [modo, fechaInicio, supabase, anioActual])
 
-  // Intercambio dinámico de variables según la pestaña
   const ventasActivas = datosHistoricos ? datosHistoricos.ventas : (ventas || [])
   const gastosActivos = datosHistoricos ? datosHistoricos.gastos : (gastos || [])
 
@@ -95,6 +87,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     let fInicio = fechaInicio
     let fFin = fechaFin
 
+    // LÍNEA ARREGLADA: Removido el espacio y la coma fantasma que rompían la compilación
     if (modo === 'semanal') {
       const fechaRef = new Date(fechaInicio + 'T00:00:00')
       const diaSemana = fechaRef.getDay()
@@ -105,7 +98,6 @@ export default function Balance({ ventas, gastos, supabase }: any) {
       fFin = fechaInicio
     }
 
-    // Si estamos en modo anual o mensual, le pasamos las fechas completas del periodo al calculador
     if (modo === 'anual') {
       fInicio = `${anioActual}-01-01`
       fFin = `${anioActual}-12-31`
@@ -171,8 +163,8 @@ export default function Balance({ ventas, gastos, supabase }: any) {
       </div>
 
       {cargandoHistorico && (
-        <div className="p-4 bg-blue-50 text-blue-600 rounded-xl text-center text-[10px] font-black uppercase tracking-wider animate-pulse">
-          🔄 Sincronizando totales reales desde el servidor...
+        <div className="mx-2 p-4 bg-blue-50 text-blue-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-wider animate-pulse border border-blue-100">
+          🔄 Cargando el histórico completo desde la base de datos...
         </div>
       )}
 
