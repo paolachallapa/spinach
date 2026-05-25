@@ -24,28 +24,25 @@ export default function Home() {
 
   const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false)
 
-  // Función de carga masiva corregida y optimizada
-  // Función de carga masiva corregida para soportar alto volumen de ventas
+  // Carga masiva optimizada para el flujo de trabajo diario (últimos 90 días)
   const cargarDatos = async () => {
-    const anioActual = new Date().getFullYear();
-    const inicioAnio = `${anioActual}-01-01T00:00:00Z`;
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - 90);
+    // Usamos formato limpio para evitar errores de comparación de texto en Supabase
+    const inicio90Dias = fechaLimite.toISOString().substring(0, 10) + " 00:00:00";
 
-    // Ejecutamos las consultas en paralelo pidiendo un rango amplio (ej. 20,000 filas)
-    // Esto evita que Supabase corte la descarga al llegar a las 1000 filas por defecto
     const [resProductos, resVentas, resGastos] = await Promise.all([
       supabase.from('productos').select('*').order('nombre'),
-      
       supabase.from('ventas')
         .select('*')
-        .gte('creado_at', inicioAnio)
+        .gte('creado_at', inicio90Dias)
         .order('creado_at', { ascending: false })
-        .range(0, 20000), // 👈 AQUÍ: Forzamos a traer hasta 20,000 ventas del año
-        
+        .limit(5000), 
       supabase.from('gastos')
         .select('*')
-        .gte('created_at', inicioAnio)
+        .gte('created_at', inicio90Dias)
         .order('created_at', { ascending: false })
-        .range(0, 5000)   // 👈 AQUÍ: Forzamos a traer hasta 5,000 gastos
+        .limit(2000)
     ]);
     
     if (resProductos.data) setProductos(resProductos.data)
@@ -67,7 +64,6 @@ export default function Home() {
     }
   }
 
-  // CORRECCIÓN AQUÍ: Quitamos 'vista' de las dependencias para evitar peticiones duplicadas innecesarias
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -80,7 +76,6 @@ export default function Home() {
           .eq('id', session.user.id)
           .single()
         setPerfil(data)
-        // Cargamos todo el histórico del año al validar la sesión
         await cargarDatos()
       }
       setCargando(false)
@@ -94,7 +89,7 @@ export default function Home() {
     })
 
     return () => subscription.unsubscribe()
-  }, []) // 👈 Lista de dependencias vacía para que se ejecute solo al montar el componente
+  }, [])
 
   const cerrarSesion = async () => {
     await supabase.auth.signOut()
@@ -175,15 +170,21 @@ export default function Home() {
         </div>
       </header>
 
-      <header className="bg-white shadow-md mb-4 sticky top-0 z-50 print:hidden text-center p-4">
-        {/* Tu barra de navegación intacta */}
-      </header>
-
       <main className="max-w-5xl mx-auto px-2">
         {vista === 'menu' && <Menu productos={productos} ventas={ventasValidas} alTerminar={cargarDatos} />}
         {vista === 'pya' && perfil?.rol === 'admin' && <PanelPedidosYa ventas={ventasValidas} alTerminar={cargarDatos} />}
         {vista === 'gastos' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Gastos gastos={gastos} alTerminar={cargarDatos} />}
-        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas || []} gastos={gastos || []} alTerminar={cargarDatos} />}
+        
+        {/* ENVIAMOS VENTAS COMPLETAS Y GASTOS COMPLETOS MAPEADOS PARA EL COMPONENTE DE BALANCE */}
+        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && (
+          <Balance 
+            ventas={ventasValidas} 
+            gastos={gastos} 
+            alTerminar={cargarDatos} 
+            supabase={supabase} 
+          />
+        )}
+        
         {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} productos={productos} />}
         {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} perfilUsuario={perfil} />}
         {vista === 'admin' && <Gestion productos={productos} alTerminar={cargarDatos} />}
