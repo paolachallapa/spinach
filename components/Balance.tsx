@@ -4,17 +4,35 @@ import { calcularBalance } from '@/hooks/BalanceLogic'
 import { CardBalance, ItemGasto, IndicadorRendimiento, SelectorRango, TablaGananciasPorDia } from './BalanceUI'
 
 export default function Balance({ ventas, gastos }: any) {
-  const [fechaInicio, setFechaInicio] = useState(new Date().toLocaleDateString('sv-SE'))
-  const [fechaFin, setFechaFin] = useState(new Date().toLocaleDateString('sv-SE'))
+  const anioActual = new Date().getFullYear()
+  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
+
+  // Estado único de fechas de control
+  const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
+  const [fechaFin, setFechaFin] = useState(hoyFormateado)
+  
   const [modo, setModo] = useState<'semanal' | 'mensual' | 'anual' | 'rango'>('semanal')
-  // Nuevo estado para controlar la segmentación en el modo Rango
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'ingresos' | 'egresos'>('todos')
+
+  // Manejador del cambio de modo para reconfigurar las fechas automáticas
+  const cambiarModo = (nuevoModo: 'semanal' | 'mensual' | 'anual' | 'rango') => {
+    setModo(nuevoModo)
+    if (nuevoModo === 'rango') {
+      // Si elige Rango, expandimos el inicio al 1 de enero para traer marzo, abril y mayo de golpe
+      setFechaInicio(`${anioActual}-01-01`)
+      setFechaFin(hoyFormateado)
+    } else {
+      // Si vuelve a semanal, mensual o anual, la fecha de referencia vuelve a ser hoy
+      setFechaInicio(hoyFormateado)
+      setFechaFin(hoyFormateado)
+    }
+  }
 
   const ventasValidas = useMemo(() => {
     return ventas?.filter((v: any) => v.estado !== 'anulado') || [];
   }, [ventas]);
 
-  // Pasamos "tipoFiltro" a los cálculos memorizados
+  // Ejecución de la lógica matemática compartida
   const data = useMemo(() => {
     return calcularBalance(ventasValidas, gastos, modo, fechaInicio, fechaFin, tipoFiltro);
   }, [ventasValidas, gastos, modo, fechaInicio, fechaFin, tipoFiltro]);
@@ -29,13 +47,13 @@ export default function Balance({ ventas, gastos }: any) {
         }
       `}</style>
       
-      {/* MENÚ SUPERIOR (OCULTO EN PDF) */}
+      {/* MENÚ SUPERIOR DE MODOS */}
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 print:hidden mx-2">
         <div className="flex bg-gray-100 p-1 rounded-2xl flex-wrap gap-1">
           {['semanal', 'mensual', 'anual', 'rango'].map((m) => (
             <button
               key={m}
-              onClick={() => setModo(m as any)}
+              onClick={() => cambiarModo(m as any)}
               className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
                 modo === m ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'
               }`}
@@ -51,8 +69,11 @@ export default function Balance({ ventas, gastos }: any) {
               <span className="text-[9px] font-black text-gray-400 uppercase px-2">Fecha Ref:</span>
               <input 
                 type="date" 
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
+                value={fechaInicio} 
+                onChange={(e) => {
+                  setFechaInicio(e.target.value)
+                  setFechaFin(e.target.value)
+                }}
                 className="bg-transparent font-black text-sm text-blue-600 outline-none"
               />
             </div>
@@ -67,7 +88,7 @@ export default function Balance({ ventas, gastos }: any) {
         </div>
       </div>
 
-      {/* ENCABEZADO EXCLUSIVO PARA IMPRESIÓN PDF (CENTRADO) */}
+      {/* ENCABEZADO CENTRADO PARA IMPRESIÓN PDF */}
       <div className="hidden print:block border-b-2 border-gray-200 pb-4 mb-6 text-center">
         <h1 className="text-2xl font-black text-gray-800 uppercase tracking-widest">SPINACH RESTAURANT</h1>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Reporte Consolidado de Balance de Caja</p>
@@ -77,7 +98,7 @@ export default function Balance({ ventas, gastos }: any) {
         </p>
       </div>
 
-      {/* REJILLA DE TARJETA EN FILA UNIFICADA */}
+      {/* FILA DE LAS 3 TARJETAS */}
       <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 px-2 print:px-0">
         <CardBalance titulo={`Ingresos ${modo}`} monto={data.ingresos} color="green" />
         <CardBalance titulo={`Gastos ${modo}`} monto={data.egresos} color="red" />
@@ -89,7 +110,7 @@ export default function Balance({ ventas, gastos }: any) {
         <IndicadorRendimiento ingresos={data.ingresos} egresos={data.egresos} />
       </div>
 
-      {/* SELECTOR ADICIONAL DE FECHAS + FILTRO ESPECÍFICO (SOLO CUANDO MODO ES RANGO) */}
+      {/* MOSTRAR SELECTOR EXTENDIDO EN RANGO */}
       {modo === 'rango' && (
         <SelectorRango 
           fechaInicio={fechaInicio} setFechaInicio={setFechaInicio}
@@ -98,10 +119,10 @@ export default function Balance({ ventas, gastos }: any) {
         />
       )}
 
-     {/* TABLA DE GANANCIAS CONSOLIDADAS POR DÍA */}
-<div className="mx-2 print:mx-0">
-  <TablaGananciasPorDia listaDias={data.listaDias} tipoFiltro={tipoFiltro} />
-</div>
+      {/* TABLA DEL REPORTE */}
+      <div className="mx-2 print:mx-0">
+        <TablaGananciasPorDia listaDias={data.listaDias} tipoFiltro={tipoFiltro} />
+      </div>
 
       {/* DETALLE DE EGRESOS INDIVIDUALES */}
       <div className="mx-2 bg-white p-8 rounded-[3rem] shadow-sm border border-gray-50 print:hidden">
