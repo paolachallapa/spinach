@@ -6,79 +6,78 @@ export function calcularBalance(
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
-  // fechaInicio y fechaFin vienen en formato "YYYY-MM-DD"
+  // Las variables fechaInicio y fechaFin vienen en formato texto puro: "YYYY-MM-DD"
   const refAnio = fechaInicio.substring(0, 4); // "2026"
-  const refMes = fechaInicio.substring(5, 7);   // "05" (Mayo)
+  const refMes = fechaInicio.substring(5, 7);   // "05"
 
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // --- 1. FILTRADO SEGURO POR TEXTO PLANO ---
-  const extraerFechaLimpia = (registro: any, esGasto: boolean) => {
-    // Forzamos la lectura del campo exacto de Supabase
-    const campoFecha = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
-    if (!campoFecha) return null;
-    // Retorna los primeros 10 caracteres: "YYYY-MM-DD"
-    return campoFecha.substring(0, 10);
+  // --- 1. FUNCIÓN INTERNA ULTRA SEGURA PARA EXTRAER TEXTO "YYYY-MM-DD" ---
+  const extraerFechaTexto = (registro: any, esGasto: boolean) => {
+    const campoRaw = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
+    if (!campoRaw) return null;
+    return campoRaw.substring(0, 10); // Corta exactamente los primeros 10 caracteres: "YYYY-MM-DD"
   };
 
+  // --- 2. FILTRADO DIRECTO SIN USAR FUNCIONES EXTERNAS ---
   if (modo === 'rango') {
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
-        const fStr = extraerFechaLimpia(v, false);
+        const fStr = extraerFechaTexto(v, false);
         return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
       }) || [];
     }
     if (tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
       gF = gastos?.filter((g: any) => {
-        const fStr = extraerFechaLimpia(g, true);
+        const fStr = extraerFechaTexto(g, true);
         return fStr ? (fStr >= fechaInicio && fStr <= fechaFin) : false;
       }) || [];
     }
   } else {
-    const filtrarPorModoTexto = (registro: any, esGasto: boolean) => {
-      const fechaLimpia = extraerFechaLimpia(registro, esGasto);
-      if (!fechaLimpia) return false;
+    // MODOS SEMANAL, MENSUAL, ANUAL
+    const filtrarPorModo = (registro: any, esGasto: boolean) => {
+      const fStr = extraerFechaTexto(registro, esGasto);
+      if (!fStr) return false;
 
-      const regAnio = fechaLimpia.substring(0, 4);
-      const regMes = fechaLimpia.substring(5, 7);
+      const regAnio = fStr.substring(0, 4);
+      const regMes = fStr.substring(5, 7);
 
       if (modo === 'mensual') {
         return regAnio === refAnio && regMes === refMes;
       }
       if (modo === 'anual') {
-        return regAnio === refAnio; // Trae todo el 2026 completo (marzo, abril, mayo)
+        return regAnio === refAnio; // Trae todo el año 2026 completo
       }
       if (modo === 'semanal') {
-        // Filtro rápido de 7 días hacia atrás usando strings
-        return fechaLimpia <= fechaInicio && fechaLimpia >= fechaFin;
+        return fStr <= fechaInicio && fStr >= fechaFin;
       }
       return true;
     };
 
-    vF = ventas?.filter((v: any) => filtrarPorModoTexto(v, false)) || [];
-    gF = gastos?.filter((g: any) => filtrarPorModoTexto(g, true)) || [];
+    vF = ventas?.filter((v: any) => filtrarPorModo(v, false)) || [];
+    gF = gastos?.filter((g: any) => filtrarPorModo(g, true)) || [];
   }
 
-  // --- 2. CÁLCULO DE TOTALES ---
+  // --- 3. SUMATORIAS DE TARJETAS ---
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- 3. CONSTRUCCIÓN DE LA TABLA POR DÍAS (Soporta formatos sin la 'T') ---
+  // --- 4. AGRUPACIÓN PARA LA TABLA ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
   vF.forEach((v: any) => {
-    const fStr = extraerFechaLimpia(v, false);
+    const fStr = extraerFechaTexto(v, false);
     if (fStr) {
       const [y, m, d] = fStr.split('-');
-      const fechaFormateada = `${d}/${m}/${y}`; // Convierte a DD/MM/YYYY
+      const fechaFormateada = `${d}/${m}/${y}`; // Pasa a formato "DD/MM/YYYY" para la tabla
       if (!gananciasPorDia[fechaFormateada]) gananciasPorDia[fechaFormateada] = { ingresos: 0, egresos: 0 };
       gananciasPorDia[fechaFormateada].ingresos += Number(v.precio_venta || 0);
     }
   });
 
   gF.forEach((g: any) => {
-    const fStr = extraerFechaLimpia(g, true);
+    const fStr = extraerFechaTexto(g, true);
     if (fStr) {
       const [y, m, d] = fStr.split('-');
       const fechaFormateada = `${d}/${m}/${y}`;
@@ -95,7 +94,7 @@ export function calcularBalance(
   })).sort((a, b) => {
     const dataA = a.fecha.split('/').reverse().join('-');
     const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA); // Ordenar: Más reciente arriba
+    return dataB.localeCompare(dataA); // Las fechas más nuevas primero
   });
 
   return { ingresos, egresos, listaDias, gF };
