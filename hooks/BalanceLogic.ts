@@ -6,12 +6,13 @@ export function calcularBalance(
   fechaFin: string, 
   tipoFiltro: 'todos' | 'ingresos' | 'egresos' = 'todos'
 ) {
+  // Creamos la fecha de referencia de hoy de forma limpia
   const hoy = new Date(fechaInicio + 'T00:00:00');
   
   let vF: any[] = [];
   let gF: any[] = [];
 
-  // --- LÓGICA DE FILTRADO SEGÚN EL MODO ---
+  // --- LÓGICA DE FILTRADO MEJORADA ---
   if (modo === 'rango') {
     const inicioRango = new Date(fechaInicio + 'T00:00:00');
     const finRango = new Date(fechaFin + 'T23:59:59');
@@ -29,19 +30,27 @@ export function calcularBalance(
       }) || [];
     }
   } else {
+    // Para modos normales, evaluamos individualmente cada registro sin romper el flujo
     const filtrarPorModo = (fechaStr: string) => {
       const f = new Date(fechaStr);
+      
       if (modo === 'semanal') {
+        // 7 días atrás a partir de la fecha de referencia
         const sieteDiasAtras = new Date(hoy);
         sieteDiasAtras.setDate(hoy.getDate() - 7);
         return f >= sieteDiasAtras && f <= new Date(fechaInicio + 'T23:59:59');
       }
+      
       if (modo === 'mensual') {
+        // Trae todo lo que corresponda al mismo mes y año de la fecha de referencia
         return f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
       }
+      
       if (modo === 'anual') {
+        // ¡TRAE TODO EL AÑO COMPLETO! Al estar en 2026, te incluirá marzo, abril y mayo juntos
         return f.getFullYear() === hoy.getFullYear();
       }
+      
       return true;
     };
 
@@ -53,10 +62,9 @@ export function calcularBalance(
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- CONSTRUCCIÓN DE LA TABLA FILTRADA ---
+  // --- CONSTRUCCIÓN DE LA TABLA POR DÍA (RESPETA EL FILTRO EN CUALQUIER MODO) ---
   const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
-  // Solo procesamos ventas si el filtro lo permite
   if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
     vF.forEach((v: any) => {
       const fechaClave = new Date(v.creado_at || v.created_at).toLocaleDateString('es-ES', {
@@ -67,7 +75,6 @@ export function calcularBalance(
     });
   }
 
-  // Solo procesamos gastos si el filtro lo permite
   if (modo !== 'rango' || tipoFiltro === 'todos' || tipoFiltro === 'egresos') {
     gF.forEach((g: any) => {
       const fechaClave = new Date(g.created_at || g.creado_at).toLocaleDateString('es-ES', {
@@ -86,7 +93,7 @@ export function calcularBalance(
   })).sort((a, b) => {
     const dataA = a.fecha.split('/').reverse().join('-');
     const dataB = b.fecha.split('/').reverse().join('-');
-    return dataB.localeCompare(dataA);
+    return dataB.localeCompare(dataA); // Orden descendente (más nuevo arriba)
   });
 
   return { ingresos, egresos, listaDias, gF };
