@@ -171,7 +171,7 @@ export default function Home() {
         {vista === 'menu' && <Menu productos={productos} ventas={ventasValidas} alTerminar={cargarDatos} />}
         {vista === 'pya' && perfil?.rol === 'admin' && <PanelPedidosYa ventas={ventasValidas} alTerminar={cargarDatos} />}
         {vista === 'gastos' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Gastos gastos={gastos} alTerminar={cargarDatos} />}
-        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas} gastos={gastos} />}
+        {vista === 'balance' && (perfil?.rol === 'admin' || perfil?.rol === 'subadmin') && <Balance ventas={ventasValidas || []} gastos={gastos || []} alTerminar={cargarDatos} />}
         {vista === 'reporte' && <Reportes ventas={ventasValidas} gastos={gastos} productos={productos} />}
         {vista === 'historial' && <Tickets ventas={ventas} alTerminar={cargarDatos} perfilUsuario={perfil} />}
         {vista === 'admin' && <Gestion productos={productos} alTerminar={cargarDatos} />}
