@@ -52,13 +52,14 @@ export function calcularBalance(
       const fStr = extraerFechaTexto(registro, esGasto);
       if (!fStr) return false;
 
-      const [y, m] = fStr.split('-');
+      const regAnio = fStr.substring(0, 4);
+      const regMes = fStr.substring(5, 7);
 
       if (modo === 'mensual') {
-        return y === refAnio && m === mesSeleccionado;
+        return regAnio === refAnio && regMes === mesSeleccionado;
       }
       if (modo === 'anual') {
-        return y === refAnio;
+        return regAnio === refAnio;
       }
       return true;
     };
@@ -71,58 +72,78 @@ export function calcularBalance(
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- OBTENCIÓN Y AGRUPACIÓN DE LA TABLA (Misma lógica exacta) ---
-  const gananciasAgrupadas: { [key: string]: { ingresos: number; egresos: number } } = {};
+  // --- AGRUPACIÓN PARA LA TABLA ---
+  let listaDias: any[] = [];
 
-  vF.forEach((v: any) => {
-    const fStr = extraerFechaTexto(v, false);
-    if (fStr) {
-      // Usamos la misma lógica del split que usas abajo
-      const [y, m, d] = fStr.split('-');
-      
-      // Si el modo es anual la clave de grupo es el mes (m), si no, el día completo (fStr)
-      const claveGrupo = modo === 'anual' ? m : fStr; 
+  if (modo === 'anual') {
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const gananciasAgrupadasAnual: { [key: string]: { ingresos: number; egresos: number } } = {};
 
-      if (!gananciasAgrupadas[claveGrupo]) gananciasAgrupadas[claveGrupo] = { ingresos: 0, egresos: 0 };
-      gananciasAgrupadas[claveGrupo].ingresos += Number(v.precio_venta || 0);
-    }
-  });
+    vF.forEach((v: any) => {
+      const fStr = extraerFechaTexto(v, false);
+      if (fStr) {
+        // Extraemos de forma segura el mes "MM" usando las posiciones fijas del substring limpio
+        const mesStr = fStr.substring(5, 7);
+        if (!gananciasAgrupadasAnual[mesStr]) gananciasAgrupadasAnual[mesStr] = { ingresos: 0, egresos: 0 };
+        gananciasAgrupadasAnual[mesStr].ingresos += Number(v.precio_venta || 0);
+      }
+    });
 
-  gF.forEach((g: any) => {
-    const fStr = extraerFechaTexto(g, true);
-    if (fStr) {
-      const [y, m, d] = fStr.split('-');
-      const claveGrupo = modo === 'anual' ? m : fStr;
+    gF.forEach((g: any) => {
+      const fStr = extraerFechaTexto(g, true);
+      if (fStr) {
+        const mesStr = fStr.substring(5, 7);
+        if (!gananciasAgrupadasAnual[mesStr]) gananciasAgrupadasAnual[mesStr] = { ingresos: 0, egresos: 0 };
+        gananciasAgrupadasAnual[mesStr].egresos += Number(g.monto || 0);
+      }
+    });
 
-      if (!gananciasAgrupadas[claveGrupo]) gananciasAgrupadas[claveGrupo] = { ingresos: 0, egresos: 0 };
-      gananciasAgrupadas[claveGrupo].egresos += Number(g.monto || 0);
-    }
-  });
-
-  // --- FORMATEO FINAL DE LA LISTA PARA LA TABLA ---
-  const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-  let listaDias = Object.keys(gananciasAgrupadas).map((clave) => {
-    if (modo === 'anual') {
-      const indexMes = parseInt(clave) - 1;
+    listaDias = Object.keys(gananciasAgrupadasAnual).map((mesStr) => {
+      const indexMes = parseInt(mesStr) - 1;
       return {
         fecha: mesesNombres[indexMes],
-        fechaRaw: clave, // "05"
-        ingresos: gananciasAgrupadas[clave].ingresos,
-        egresos: gananciasAgrupadas[clave].egresos,
-        neto: gananciasAgrupadas[clave].ingresos - gananciasAgrupadas[clave].egresos
+        fechaRaw: mesStr,
+        ingresos: gananciasAgrupadasAnual[mesStr].ingresos,
+        egresos: gananciasAgrupadasAnual[mesStr].egresos,
+        neto: gananciasAgrupadasAnual[mesStr].ingresos - gananciasAgrupadasAnual[mesStr].egresos
       };
-    } else {
-      const [y, m, d] = clave.split('-');
+    }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
+
+  } else {
+    // MODOS DIARIOS (Semanal, Mensual, Rango): Volvemos a tu estructura original intacta y segura
+    const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
+
+    vF.forEach((v: any) => {
+      const fStr = extraerFechaTexto(v, false);
+      if (fStr) {
+        if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
+        gananciasPorDia[fStr].ingresos += Number(v.precio_venta || 0);
+      }
+    });
+
+    gF.forEach((g: any) => {
+      const fStr = extraerFechaTexto(g, true);
+      if (fStr) {
+        if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
+        gananciasPorDia[fStr].egresos += Number(g.monto || 0);
+      }
+    });
+
+    listaDias = Object.keys(gananciasPorDia).map((fStr) => {
+      // Formateo clásico de días separando de forma segura
+      const partes = fStr.split('-');
+      const y = partes[0];
+      const m = partes[1];
+      const d = partes[2] || '01'; // Fallback seguro por si no hay día definido
       return {
         fecha: `${d}/${m}/${y}`,
-        fechaRaw: clave, // "2026-05-25"
-        ingresos: gananciasAgrupadas[clave].ingresos,
-        egresos: gananciasAgrupadas[clave].egresos,
-        neto: gananciasAgrupadas[clave].ingresos - gananciasAgrupadas[clave].egresos
+        fechaRaw: fStr,
+        ingresos: gananciasPorDia[fStr].ingresos,
+        egresos: gananciasPorDia[fStr].egresos,
+        neto: gananciasPorDia[fStr].ingresos - gananciasPorDia[fStr].egresos
       };
-    }
-  }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
+    }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
+  }
 
   return { ingresos, egresos, listaDias, gF };
 }
