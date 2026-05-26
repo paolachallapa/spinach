@@ -63,10 +63,18 @@ export default function Balance({ ventas, gastos, supabase }: any) {
   const gastosActivos = datosHistoricos ? datosHistoricos.gastos : (gastos || [])
   const ventasValidas = useMemo(() => ventasActivas?.filter((v: any) => v.estado !== 'anulado') || [], [ventasActivas])
 
-// Dentro de components/Balance.tsx modifica tu useMemo de data para quedar así:
-const data = useMemo(() => {
-  return calcularBalance(ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, mesSeleccionado)
-}, [ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, mesSeleccionado])
+  // Ajuste de rango completo forzado en memoria para la lógica anual
+  const data = useMemo(() => {
+    let fInicio = fechaInicio
+    let fFin = fechaFin
+
+    if (modo === 'anual') {
+      fInicio = `${anioActual}-01-01`
+      fFin = `${anioActual}-12-31`
+    }
+
+    return calcularBalance(ventasValidas, gastosActivos, modo, fInicio, fFin, tipoFiltro, mesSeleccionado)
+  }, [ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, mesSeleccionado, anioActual])
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-10 print:p-12 print:max-w-full print:space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
