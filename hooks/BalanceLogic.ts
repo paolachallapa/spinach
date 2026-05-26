@@ -14,7 +14,9 @@ export function calcularBalance(
     fMax = fechaInicio;
   }
 
-  // Corregido: Variable unificada sin espacios y limpia
+  // Extracción del año real de trabajo basado en la fecha de referencia
+  const anioFiltro = fMin.substring(0, 4); 
+
   if (modo === 'semanal') {
     const fechaRef = new Date(fMin + 'T00:00:00');
     const diaSemana = fechaRef.getDay(); 
@@ -32,7 +34,7 @@ export function calcularBalance(
     return campoRaw.substring(0, 10);
   };
 
-  // --- FILTRADO SEGURO ---
+  // --- FILTRADO SEGURO PARA TARJETAS Y TABLAS DIARIAS ---
   if (modo === 'rango' || modo === 'semanal') {
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
@@ -55,10 +57,10 @@ export function calcularBalance(
       const regMes = fStr.substring(5, 7);
 
       if (modo === 'mensual') {
-        return regAnio === fMin.substring(0, 4) && regMes === mesSeleccionado;
+        return regAnio === anioFiltro && regMes === mesSeleccionado;
       }
       if (modo === 'anual') {
-        return regAnio === fMin.substring(0, 4);
+        return regAnio === anioFiltro;
       }
       return true;
     };
@@ -67,20 +69,23 @@ export function calcularBalance(
     gF = gastos?.filter((g: any) => filtrarPorModo(g, true)) || [];
   }
 
-  // --- SUMATORIAS GLOBALES ADAPTADAS ---
-  // Si es anual, forzamos que las tarjetas calculen sobre el año completo evaluado
+  // --- SUMATORIAS GLOBALES PARA LAS TARJETAS ---
   let ingresos = 0;
   let egresos = 0;
-  const anioFiltro = fMin.substring(0, 4);
 
   if (modo === 'anual') {
+    // Si es anual, barremos el array completo original para calcular las tarjetas superiores
     ventas?.forEach((v: any) => {
       const fStr = extraerFechaTexto(v, false);
-      if (fStr && fStr.substring(0, 4) === anioFiltro) ingresos += Number(v.precio_venta || 0);
+      if (fStr && fStr.substring(0, 4) === anioFiltro) {
+        ingresos += Number(v.precio_venta || 0);
+      }
     });
     gastos?.forEach((g: any) => {
       const fStr = extraerFechaTexto(g, true);
-      if (fStr && fStr.substring(0, 4) === anioFiltro) egresos += Number(g.monto || 0);
+      if (fStr && fStr.substring(0, 4) === anioFiltro) {
+        egresos += Number(g.monto || 0);
+      }
     });
   } else {
     ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
@@ -98,6 +103,7 @@ export function calcularBalance(
       let ingMes = 0;
       let egrMes = 0;
 
+      // Forzamos la lectura directa del array original 'ventas' enviado desde las props
       ventas?.forEach((v: any) => {
         const fStr = extraerFechaTexto(v, false);
         if (fStr && fStr.substring(0, 4) === anioFiltro && fStr.substring(5, 7) === mesStr) {
@@ -105,6 +111,7 @@ export function calcularBalance(
         }
       });
 
+      // Forzamos la lectura directa del array original 'gastos' enviado desde las props
       gastos?.forEach((g: any) => {
         const fStr = extraerFechaTexto(g, true);
         if (fStr && fStr.substring(0, 4) === anioFiltro && fStr.substring(5, 7) === mesStr) {
