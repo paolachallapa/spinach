@@ -27,10 +27,26 @@ export function calcularBalance(
   let vF: any[] = [];
   let gF: any[] = [];
 
+  // Función de extracción ultra-segura para homogeneizar cualquier formato de Supabase/JS
   const extraerFechaTexto = (registro: any, esGasto: boolean) => {
     const campoRaw = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
     if (!campoRaw) return null;
-    return campoRaw.substring(0, 10);
+    
+    // Si ya es un string largo (ISO), tomamos los primeros 10 caracteres "YYYY-MM-DD"
+    if (typeof campoRaw === 'string') {
+      return campoRaw.substring(0, 10);
+    }
+    
+    // Si viene como objeto Date nativo de JS
+    try {
+      const d = new Date(campoRaw);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().substring(0, 10);
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
   };
 
   // --- FILTRADO DE MOVIMIENTOS ---
@@ -82,7 +98,6 @@ export function calcularBalance(
     vF.forEach((v: any) => {
       const fStr = extraerFechaTexto(v, false);
       if (fStr) {
-        // Extraemos de forma segura el mes "MM" usando las posiciones fijas del substring limpio
         const mesStr = fStr.substring(5, 7);
         if (!gananciasAgrupadasAnual[mesStr]) gananciasAgrupadasAnual[mesStr] = { ingresos: 0, egresos: 0 };
         gananciasAgrupadasAnual[mesStr].ingresos += Number(v.precio_venta || 0);
@@ -110,7 +125,6 @@ export function calcularBalance(
     }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
 
   } else {
-    // MODOS DIARIOS (Semanal, Mensual, Rango): Volvemos a tu estructura original intacta y segura
     const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
     vF.forEach((v: any) => {
@@ -130,11 +144,10 @@ export function calcularBalance(
     });
 
     listaDias = Object.keys(gananciasPorDia).map((fStr) => {
-      // Formateo clásico de días separando de forma segura
       const partes = fStr.split('-');
       const y = partes[0];
       const m = partes[1];
-      const d = partes[2] || '01'; // Fallback seguro por si no hay día definido
+      const d = partes[2] || '01';
       return {
         fecha: `${d}/${m}/${y}`,
         fechaRaw: fStr,
