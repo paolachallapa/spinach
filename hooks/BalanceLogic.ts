@@ -14,15 +14,13 @@ export function calcularBalance(
     fMax = fechaInicio;
   }
 
-  const refAnio = fMin.substring(0, 4); 
-
-  // Ajuste dinámico si estamos en modo SEMANAL para forzar el inicio desde el Lunes
+  // Corregido: Variable unificada sin espacios y limpia
   if (modo === 'semanal') {
     const fechaRef = new Date(fMin + 'T00:00:00');
-    const diaSemana = fechaRef.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+    const diaSemana = fechaRef.getDay(); 
     const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1;
     const lunesObj = new Date(fechaRef.getTime() - diasHastaLunes * 24 * 60 * 60 * 1000);
-    fMin = lunesObj.toLocaleDateString('sv-SE'); // Sobrescribimos fMin con el string del lunes "YYYY-MM-DD"
+    fMin = lunesObj.toLocaleDateString('sv-SE'); 
   }
 
   let vF: any[] = [];
@@ -57,11 +55,10 @@ export function calcularBalance(
       const regMes = fStr.substring(5, 7);
 
       if (modo === 'mensual') {
-        // Filtra usando el selector dinámico enviado desde la UI
-        return regAnio === refAnio && regMes === mesSeleccionado;
+        return regAnio === fMin.substring(0, 4) && regMes === mesSeleccionado;
       }
       if (modo === 'anual') {
-        return regAnio === refAnio;
+        return regAnio === fMin.substring(0, 4);
       }
       return true;
     };
@@ -70,15 +67,30 @@ export function calcularBalance(
     gF = gastos?.filter((g: any) => filtrarPorModo(g, true)) || [];
   }
 
-  // --- SUMATORIAS USANDO TU CAMPO CORRECTO (precio_venta) ---
-  const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
-  const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
+  // --- SUMATORIAS GLOBALES ADAPTADAS ---
+  // Si es anual, forzamos que las tarjetas calculen sobre el año completo evaluado
+  let ingresos = 0;
+  let egresos = 0;
+  const anioFiltro = fMin.substring(0, 4);
+
+  if (modo === 'anual') {
+    ventas?.forEach((v: any) => {
+      const fStr = extraerFechaTexto(v, false);
+      if (fStr && fStr.substring(0, 4) === anioFiltro) ingresos += Number(v.precio_venta || 0);
+    });
+    gastos?.forEach((g: any) => {
+      const fStr = extraerFechaTexto(g, true);
+      if (fStr && fStr.substring(0, 4) === anioFiltro) egresos += Number(g.monto || 0);
+    });
+  } else {
+    ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
+    egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
+  }
 
   // --- AGRUPACIÓN PARA LA TABLA ---
   let listaDias: any[] = [];
 
   if (modo === 'anual') {
-    // Optimización Anual: Agrupa las ganancias consolidadas por meses enteros (12 filas)
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     
     listaDias = mesesNombres.map((nombre, index) => {
@@ -86,29 +98,32 @@ export function calcularBalance(
       let ingMes = 0;
       let egrMes = 0;
 
-      vF.forEach((v: any) => {
+      ventas?.forEach((v: any) => {
         const fStr = extraerFechaTexto(v, false);
-        if (fStr && fStr.substring(5, 7) === mesStr) ingMes += Number(v.precio_venta || 0);
+        if (fStr && fStr.substring(0, 4) === anioFiltro && fStr.substring(5, 7) === mesStr) {
+          ingMes += Number(v.precio_venta || 0);
+        }
       });
 
-      gF.forEach((g: any) => {
+      gastos?.forEach((g: any) => {
         const fStr = extraerFechaTexto(g, true);
-        if (fStr && fStr.substring(5, 7) === mesStr) egrMes += Number(g.monto || 0);
+        if (fStr && fStr.substring(0, 4) === anioFiltro && fStr.substring(5, 7) === mesStr) {
+          egrMes += Number(g.monto || 0);
+        }
       });
 
       return {
         fecha: nombre,
-        fechaRaw: mesStr, // Para ordenar cronológicamente
+        fechaRaw: mesStr, 
         ingresos: ingMes,
         egresos: egrMes,
         neto: ingMes - egrMes
       };
     })
-    .filter(m => m.ingresos > 0 || m.egresos > 0) // Muestra solo meses con actividad
+    .filter(m => m.ingresos > 0 || m.egresos > 0) 
     .sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
 
   } else {
-    // Comportamiento normal por días (Semanal, Mensual o por Rangos)
     const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
 
     vF.forEach((v: any) => {
