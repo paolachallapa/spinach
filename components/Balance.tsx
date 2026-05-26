@@ -23,7 +23,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     setFechaFin(hoyFormateado)
   }
 
-  // Carga histórica optimizada para mensual/anual mediante rangos amplios
+  // Carga histórica optimizada usando formatos ISO estándar aceptados por Supabase
   useEffect(() => {
     const consultarBaseDeDatos = async () => {
       if (!supabase || (modo !== 'anual' && modo !== 'mensual')) {
@@ -38,8 +38,9 @@ export default function Balance({ ventas, gastos, supabase }: any) {
 
         if (modo === 'mensual') {
           const ultimoDia = new Date(anioActual, parseInt(mesSeleccionado), 0).getDate()
-          fMin = `${anioActual}-${mesSeleccionado}-01T00:00:00.000Z`
-          fMax = `${anioActual}-${mesSeleccionado}-${ultimoDia}T23:59:59.999Z`
+          const mesPad = mesSeleccionado.padStart(2, '0')
+          fMin = `${anioActual}-${mesPad}-01T00:00:00.000Z`
+          fMax = `${anioActual}-${mesPad}-${String(ultimoDia).padStart(2, '0')}T23:59:59.999Z`
         }
 
         const [resVentas, resGastos] = await Promise.all([
@@ -58,12 +59,34 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     consultarBaseDeDatos()
   }, [modo, mesSeleccionado, supabase, anioActual])
 
-  // Unificación de orígenes de datos (histórico o tiempo real desde props)
-  const ventasActivas = datosHistoricos ? datosHistoricos.ventas : (ventas || [])
-  const gastosActivos = datosHistoricos ? datosHistoricos.gastos : (gastos || [])
+  // Combinación inteligente de fuentes: Si estamos en anual/mensual combinamos las props locales y lo de la BD para que no falte nada
+  const ventasActivas = useMemo(() => {
+    if (modo === 'anual' || modo === 'mensual') {
+      const historicas = datosHistoricos?.ventas || []
+      const locales = ventas || []
+      // Unificamos usando el ID para evitar duplicados si se cruzan las listas
+      const mapa = new Map()
+      locales.forEach((v: any) => { if(v.id) mapa.set(v.id, v) })
+      historicas.forEach((v: any) => { if(v.id) mapa.set(v.id, v) })
+      return Array.from(mapa.values())
+    }
+    return ventas || []
+  }, [datosHistoricos, ventas, modo])
+
+  const gastosActivos = useMemo(() => {
+    if (modo === 'anual' || modo === 'mensual') {
+      const historicos = datosHistoricos?.gastos || []
+      const locales = gastos || []
+      const mapa = new Map()
+      locales.forEach((g: any) => { if(g.id) mapa.set(g.id, g) })
+      historicos.forEach((g: any) => { if(g.id) mapa.set(g.id, g) })
+      return Array.from(mapa.values())
+    }
+    return gastos || []
+  }, [datosHistoricos, gastos, modo])
+
   const ventasValidas = useMemo(() => ventasActivas?.filter((v: any) => v.estado !== 'anulado') || [], [ventasActivas])
 
-  // Ajuste de rango completo forzado en memoria para la lógica anual
   const data = useMemo(() => {
     let fInicio = fechaInicio
     let fFin = fechaFin
