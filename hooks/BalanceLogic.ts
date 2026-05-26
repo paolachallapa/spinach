@@ -30,10 +30,10 @@ export function calcularBalance(
   const extraerFechaTexto = (registro: any, esGasto: boolean) => {
     const campoRaw = esGasto ? (registro.created_at || registro.creado_at) : (registro.creado_at || registro.created_at);
     if (!campoRaw) return null;
-    return campoRaw.substring(0, 10); // "YYYY-MM-DD"
+    return campoRaw.substring(0, 10);
   };
 
-  // --- FILTRADO SEGURO ---
+  // --- FILTRADO DE MOVIMIENTOS ---
   if (modo === 'rango' || modo === 'semanal') {
     if (tipoFiltro === 'todos' || tipoFiltro === 'ingresos') {
       vF = ventas?.filter((v: any) => {
@@ -52,14 +52,13 @@ export function calcularBalance(
       const fStr = extraerFechaTexto(registro, esGasto);
       if (!fStr) return false;
 
-      const regAnio = fStr.substring(0, 4);
-      const regMes = fStr.substring(5, 7);
+      const [y, m] = fStr.split('-');
 
       if (modo === 'mensual') {
-        return regAnio === refAnio && regMes === mesSeleccionado;
+        return y === refAnio && m === mesSeleccionado;
       }
       if (modo === 'anual') {
-        return regAnio === refAnio; // Trae todo lo que pertenezca al año actual
+        return y === refAnio;
       }
       return true;
     };
@@ -68,90 +67,62 @@ export function calcularBalance(
     gF = gastos?.filter((g: any) => filtrarPorModo(g, true)) || [];
   }
 
-  // --- SUMATORIAS GLOBALES ---
+  // --- SUMATORIAS DE TARJETAS SUPERIORES ---
   const ingresos = vF.reduce((acc: number, v: any) => acc + Number(v.precio_venta || 0), 0);
   const egresos = gF.reduce((acc: number, g: any) => acc + Number(g.monto || 0), 0);
 
-  // --- AGRUPACIÓN PARA LA TABLA ---
-  let listaDias: any[] = [];
+  // --- OBTENCIÓN Y AGRUPACIÓN DE LA TABLA (Misma lógica exacta) ---
+  const gananciasAgrupadas: { [key: string]: { ingresos: number; egresos: number } } = {};
 
-  if (modo === 'anual') {
-    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    
-    // Inicializamos un mapa limpio para los 12 meses
-    const acumuladoMeses: { [key: string]: { ingresos: number; egresos: number } } = {};
-    mesesNombres.forEach((_, index) => {
-      const mesStr = String(index + 1).padStart(2, '0');
-      acumuladoMeses[mesStr] = { ingresos: 0, egresos: 0 };
-    });
+  vF.forEach((v: any) => {
+    const fStr = extraerFechaTexto(v, false);
+    if (fStr) {
+      // Usamos la misma lógica del split que usas abajo
+      const [y, m, d] = fStr.split('-');
+      
+      // Si el modo es anual la clave de grupo es el mes (m), si no, el día completo (fStr)
+      const claveGrupo = modo === 'anual' ? m : fStr; 
 
-    // ¡Tu lógica directa! Extraemos el mes de las ventas filtradas del año y sumamos
-    vF.forEach((v: any) => {
-      const fStr = extraerFechaTexto(v, false);
-      if (fStr) {
-        const mesStr = fStr.substring(5, 7); // Extrae "05" directamente
-        if (acumuladoMeses[mesStr]) {
-          acumuladoMeses[mesStr].ingresos += Number(v.precio_venta || 0);
-        }
-      }
-    });
+      if (!gananciasAgrupadas[claveGrupo]) gananciasAgrupadas[claveGrupo] = { ingresos: 0, egresos: 0 };
+      gananciasAgrupadas[claveGrupo].ingresos += Number(v.precio_venta || 0);
+    }
+  });
 
-    // Lo mismo para los gastos del año
-    gF.forEach((g: any) => {
-      const fStr = extraerFechaTexto(g, true);
-      if (fStr) {
-        const mesStr = fStr.substring(5, 7);
-        if (acumuladoMeses[mesStr]) {
-          acumuladoMeses[mesStr].egresos += Number(g.monto || 0);
-        }
-      }
-    });
+  gF.forEach((g: any) => {
+    const fStr = extraerFechaTexto(g, true);
+    if (fStr) {
+      const [y, m, d] = fStr.split('-');
+      const claveGrupo = modo === 'anual' ? m : fStr;
 
-    // Mapeamos el resultado final listo para la tabla
-    listaDias = Object.keys(acumuladoMeses).map((mesStr) => {
-      const indexMes = parseInt(mesStr) - 1;
+      if (!gananciasAgrupadas[claveGrupo]) gananciasAgrupadas[claveGrupo] = { ingresos: 0, egresos: 0 };
+      gananciasAgrupadas[claveGrupo].egresos += Number(g.monto || 0);
+    }
+  });
+
+  // --- FORMATEO FINAL DE LA LISTA PARA LA TABLA ---
+  const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  let listaDias = Object.keys(gananciasAgrupadas).map((clave) => {
+    if (modo === 'anual') {
+      const indexMes = parseInt(clave) - 1;
       return {
         fecha: mesesNombres[indexMes],
-        fechaRaw: mesStr,
-        ingresos: acumuladoMeses[mesStr].ingresos,
-        egresos: acumuladoMeses[mesStr].egresos,
-        neto: acumuladoMeses[mesStr].ingresos - acumuladoMeses[mesStr].egresos
+        fechaRaw: clave, // "05"
+        ingresos: gananciasAgrupadas[clave].ingresos,
+        egresos: gananciasAgrupadas[clave].egresos,
+        neto: gananciasAgrupadas[clave].ingresos - gananciasAgrupadas[clave].egresos
       };
-    })
-    .filter(m => m.ingresos > 0 || m.egresos > 0) // Solo muestra meses con movimiento
-    .sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw)); // Orden cronológico inverso
-
-  } else {
-    // Comportamiento por días normales (Semanal, Mensual, Rango)
-    const gananciasPorDia: { [key: string]: { ingresos: number; egresos: number } } = {};
-
-    vF.forEach((v: any) => {
-      const fStr = extraerFechaTexto(v, false);
-      if (fStr) {
-        if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
-        gananciasPorDia[fStr].ingresos += Number(v.precio_venta || 0);
-      }
-    });
-
-    gF.forEach((g: any) => {
-      const fStr = extraerFechaTexto(g, true);
-      if (fStr) {
-        if (!gananciasPorDia[fStr]) gananciasPorDia[fStr] = { ingresos: 0, egresos: 0 };
-        gananciasPorDia[fStr].egresos += Number(g.monto || 0);
-      }
-    });
-
-    listaDias = Object.keys(gananciasPorDia).map((fStr) => {
-      const [y, m, d] = fStr.split('-');
+    } else {
+      const [y, m, d] = clave.split('-');
       return {
         fecha: `${d}/${m}/${y}`,
-        fechaRaw: fStr,
-        ingresos: gananciasPorDia[fStr].ingresos,
-        egresos: gananciasPorDia[fStr].egresos,
-        neto: gananciasPorDia[fStr].ingresos - gananciasPorDia[fStr].egresos
+        fechaRaw: clave, // "2026-05-25"
+        ingresos: gananciasAgrupadas[clave].ingresos,
+        egresos: gananciasAgrupadas[clave].egresos,
+        neto: gananciasAgrupadas[clave].ingresos - gananciasAgrupadas[clave].egresos
       };
-    }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
-  }
+    }
+  }).sort((a, b) => b.fechaRaw.localeCompare(a.fechaRaw));
 
   return { ingresos, egresos, listaDias, gF };
 }
