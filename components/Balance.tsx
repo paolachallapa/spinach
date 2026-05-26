@@ -5,7 +5,8 @@ import { CardBalance, ItemGasto, IndicadorRendimiento, SelectorRango, TablaGanan
 
 export default function Balance({ ventas, gastos, supabase }: any) {
   const anioActual = new Date().getFullYear()
-  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
+  // "sv-SE" nos asegura el formato "YYYY-MM-DD" local exacto sin desfases de huso horario
+  const hoyFormateado = new Date().toLocaleDateString('sv-SE')
 
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
@@ -27,7 +28,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     }
   }
 
-  // Consulta limpia a Supabase por Rangos de año o mes
+  // EFECTO ULTRA-SIMPLIFICADO: Supabase se encarga de filtrar todo nativamente
   useEffect(() => {
     const consultarBaseDeDatos = async () => {
       if (!supabase || (modo !== 'anual' && modo !== 'mensual')) {
@@ -38,34 +39,30 @@ export default function Balance({ ventas, gastos, supabase }: any) {
       setCargandoHistorico(true)
       
       try {
-        let queryVentas = supabase.from('ventas').select('*')
-        let queryGastos = supabase.from('gastos').select('*')
+        let qVentas = supabase.from('ventas').select('*')
+        let qGastos = supabase.from('gastos').select('*')
 
         if (modo === 'anual') {
-          const inicioAnio = `${anioActual}-01-01T00:00:00.000Z`
-          const finAnio = `${anioActual}-12-31T23:59:59.999Z`
-          queryVentas = queryVentas.gte('creado_at', inicioAnio).lte('creado_at', finAnio)
-          queryGastos = queryGastos.gte('created_at', inicioAnio).lte('created_at', finAnio)
+          // Filtra todo el año sin importar las horas exactas
+          qVentas = qVentas.gte('creado_at', `${anioActual}-01-01`).lte('creado_at', `${anioActual}-12-31`)
+          qGastos = qGastos.gte('created_at', `${anioActual}-01-01`).lte('created_at', `${anioActual}-12-31`)
         } else if (modo === 'mensual') {
-          const mesActual = new Date(fechaInicio + 'T00:00:00').getMonth() + 1
-          const mesFormateado = mesActual < 10 ? `0${mesActual}` : mesActual
-          const ultimoDia = new Date(anioActual, mesActual, 0).getDate()
-          
-          const inicioMes = `${anioActual}-${mesFormateado}-01T00:00:00.000Z`
-          const finMes = `${anioActual}-${mesFormateado}-${ultimoDia}T23:59:59.999Z`
+          // Obtenemos el mes seleccionado de la fecha de referencia
+          const mes = fechaInicio.split('-')[1] 
+          const ultimoDia = new Date(anioActual, parseInt(mes), 0).getDate()
 
-          queryVentas = queryVentas.gte('creado_at', inicioMes).lte('creado_at', finMes)
-          queryGastos = queryGastos.gte('created_at', inicioMes).lte('created_at', finMes)
+          qVentas = qVentas.gte('creado_at', `${anioActual}-${mes}-01`).lte('creado_at', `${anioActual}-${mes}-${ultimoDia}`)
+          qGastos = qGastos.gte('created_at', `${anioActual}-${mes}-01`).lte('created_at', `${anioActual}-${mes}-${ultimoDia}`)
         }
 
-        const [resVentas, resGastos] = await Promise.all([queryVentas, queryGastos])
+        const [resVentas, resGastos] = await Promise.all([qVentas, qGastos])
 
         setDatosHistoricos({
           ventas: resVentas.data || [],
           gastos: resGastos.data || []
         })
       } catch (error) {
-        console.error("Error cargando histórico:", error)
+        console.error("Error en la consulta a Supabase:", error)
       } finally {
         setCargandoHistorico(false)
       }
@@ -74,14 +71,15 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     consultarBaseDeDatos()
   }, [modo, fechaInicio, supabase, anioActual])
 
+  // Selección de datos (Estado local de Supabase o Props del Home)
   const ventasActivas = datosHistoricos ? datosHistoricos.ventas : (ventas || [])
   const gastosActivos = datosHistoricos ? datosHistoricos.gastos : (gastos || [])
 
   const ventasValidas = useMemo(() => {
-    return ventasActivas?.filter((v: any) => v.estado !== 'anulado') || [];
-  }, [ventasActivas]);
+    return ventasActivas?.filter((v: any) => v.estado !== 'anulado') || []
+  }, [ventasActivas])
 
-  // Procesamos la lógica base del balance
+  // Delega el 100% del cálculo a tu archivo externo `BalanceLogic.ts`
   const data = useMemo(() => {
     let fInicio = fechaInicio
     let fFin = fechaFin
@@ -91,97 +89,29 @@ export default function Balance({ ventas, gastos, supabase }: any) {
       const diaSemana = fechaRef.getDay()
       const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1
       const lunesActual = new Date(fechaRef.getTime() - diasHastaLunes * 24 * 60 * 60 * 1000)
-      
       fInicio = lunesActual.toLocaleDateString('sv-SE')
       fFin = fechaInicio
-    }
-
-    if (modo === 'anual') {
+    } else if (modo === 'anual') {
       fInicio = `${anioActual}-01-01`
       fFin = `${anioActual}-12-31`
     } else if (modo === 'mensual') {
-      const mesActual = new Date(fechaInicio + 'T00:00:00').getMonth() + 1
-      const mesFormateado = mesActual < 10 ? `0${mesActual}` : mesActual
-      const ultimoDia = new Date(anioActual, mesActual, 0).getDate()
-      fInicio = `${anioActual}-${mesFormateado}-01`
-      fFin = `${anioActual}-${mesFormateado}-${ultimoDia}`
+      const mes = fechaInicio.split('-')[1]
+      const ultimoDia = new Date(anioActual, parseInt(mes), 0).getDate()
+      fInicio = `${anioActual}-${mes}-01`
+      fFin = `${anioActual}-${mes}-${ultimoDia}`
     }
 
-    return calcularBalance(ventasValidas, gastosActivos, modo, fInicio, fFin, tipoFiltro);
-  }, [ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, anioActual]);
-
-  // SOLUCIÓN AL CONFLICTO: Re-calculamos y unificamos la lista de días para que NUNCA se salte ningún día de ningún mes
-  const listaDiasCorregida = useMemo(() => {
-    if (modo !== 'anual' && modo !== 'mensual') return data.listaDias;
-
-    const mapeoDias: { [key: string]: { fecha: string; ingresos: number; egresos: number; balanceNeto: number } } = {};
-
-    // 1. Agrupar todas las ventas reales por su día correspondiente
-    ventasValidas.forEach((v: any) => {
-      const fechaRaw = v.creado_at || v.created_at;
-      if (!fechaRaw) return;
-      
-      // Extraemos la fecha limpia en formato DD/MM/YYYY
-      const fechaObj = new Date(fechaRaw);
-      const dia = String(fechaObj.getDate()).padStart(2, '0');
-      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-      const anio = fechaObj.getFullYear();
-      const fechaClave = `${dia}/${mes}/${anio}`;
-
-      // Si la fecha contiene caracteres extraños o es inválida, usamos el formato que venga por texto
-      const fechaFinal = isNaN(fechaObj.getTime()) ? String(fechaRaw).split('T')[0] : fechaClave;
-
-      const monto = Number(v.total || v.monto || 0);
-
-      if (!mapeoDias[fechaFinal]) {
-        mapeoDias[fechaFinal] = { fecha: fechaFinal, ingresos: 0, egresos: 0, balanceNeto: 0 };
-      }
-      mapeoDias[fechaFinal].ingresos += monto;
-    });
-
-    // 2. Agrupar todos los gastos reales por su día correspondiente
-    gastosActivos.forEach((g: any) => {
-      const fechaRaw = g.created_at || g.creado_at;
-      if (!fechaRaw) return;
-
-      const fechaObj = new Date(fechaRaw);
-      const dia = String(fechaObj.getDate()).padStart(2, '0');
-      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-      const anio = fechaObj.getFullYear();
-      const fechaClave = `${dia}/${mes}/${anio}`;
-
-      const fechaFinal = isNaN(fechaObj.getTime()) ? String(fechaRaw).split('T')[0] : fechaClave;
-      const monto = Number(g.monto || 0);
-
-      if (!mapeoDias[fechaFinal]) {
-        mapeoDias[fechaFinal] = { fecha: fechaFinal, ingresos: 0, egresos: 0, balanceNeto: 0 };
-      }
-      mapeoDias[fechaFinal].egresos += monto;
-    });
-
-    // 3. Convertir el mapa a un arreglo, calcular el balance neto y ordenarlo de más reciente a más antiguo
-    return Object.values(mapeoDias)
-      .map((d) => ({
-        ...d,
-        balanceNeto: d.ingresos - d.egresos
-      }))
-      .sort((a, b) => {
-        const [diaA, mesA, anioA] = a.fecha.split('/').map(Number);
-        const [diaB, mesB, anioB] = b.fecha.split('/').map(Number);
-        return new Date(anioB, mesB - 1, diaB).getTime() - new Date(anioA, mesA - 1, diaA).getTime();
-      });
-  }, [ventasValidas, gastosActivos, modo, data.listaDias]);
+    return calcularBalance(ventasValidas, gastosActivos, modo, fInicio, fFin, tipoFiltro)
+  }, [ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, anioActual])
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-10 print:p-12 print:max-w-full print:space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
       <style jsx global>{`
-        @media print {
-          @page { margin: 0; }
-          body { margin: 0; }
-        }
+        @media print { @page { margin: 0; } body { margin: 0; } }
       `}</style>
       
+      {/* Barra de Controles */}
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 print:hidden mx-2">
         <div className="flex bg-gray-100 p-1 rounded-2xl flex-wrap gap-1">
           {['semanal', 'mensual', 'anual', 'rango'].map((m) => (
@@ -223,20 +153,18 @@ export default function Balance({ ventas, gastos, supabase }: any) {
       </div>
 
       {cargandoHistorico && (
-        <div className="mx-2 p-4 bg-blue-50 text-blue-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-wider animate-pulse border border-blue-100">
-          🔄 Estructurando el historial consolidado del año...
+        <div className="mx-2 p-4 bg-blue-50 text-blue-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-wider border border-blue-100">
+          🔄 Sincronizando datos del servidor...
         </div>
       )}
 
+      {/* Cabecera de Impresión */}
       <div className="hidden print:block border-b-2 border-gray-200 pb-4 mb-6 text-center">
         <h1 className="text-2xl font-black text-gray-800 uppercase tracking-widest">SPINACH RESTAURANT</h1>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Reporte Consolidado de Balance de Caja</p>
-        <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider mt-1.5 bg-blue-50/60 inline-block px-4 py-1 rounded-full">
-          Periodo ({modo}): {modo === 'rango' ? `${fechaInicio} hasta ${fechaFin}` : fechaInicio}
-          {modo === 'rango' && ` • Filtro: ${tipoFiltro.toUpperCase()}`}
-        </p>
       </div>
 
+      {/* Tarjetas de Totales */}
       <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 px-2 print:px-0">
         <CardBalance titulo={`Ingresos ${modo}`} monto={data.ingresos} color="green" />
         <CardBalance titulo={`Gastos ${modo}`} monto={data.egresos} color="red" />
@@ -255,14 +183,15 @@ export default function Balance({ ventas, gastos, supabase }: any) {
         />
       )}
 
-      {/* AQUÍ PASAMOS LA LISTA TOTALMENTE RECONSTRUIDA Y ORDENADA */}
+      {/* Componente UI de la Tabla de días utilizando la lista nativa del hook */}
       <div className="mx-2 print:mx-0">
-        <TablaGananciasPorDia listaDias={listaDiasCorregida} tipoFiltro={tipoFiltro} />
+        <TablaGananciasPorDia listaDias={data.listaDias} tipoFiltro={tipoFiltro} />
       </div>
 
+      {/* Detalle de Egresos */}
       <div className="mx-2 bg-white p-8 rounded-[3rem] shadow-sm border border-gray-50 print:hidden">
         <h3 className="text-center text-[10px] font-black text-gray-300 uppercase mb-6 tracking-[0.4em] italic">
-          Detalle de Egresos - Individuales ({modo})
+          Detalle de Egresos ({modo})
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {data.gF && data.gF.length > 0 ? (
@@ -271,7 +200,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
             ))
           ) : (
             <div className="col-span-2 py-10 text-center text-gray-300 text-[10px] font-black uppercase italic">
-              Sin egresos en este periodo con el filtro seleccionado
+              Sin egresos en este periodo
             </div>
           )}
         </div>
