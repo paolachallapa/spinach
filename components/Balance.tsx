@@ -5,7 +5,7 @@ import { CardBalance, ItemGasto, IndicadorRendimiento, SelectorRango, TablaGanan
 
 export default function Balance({ ventas, gastos, supabase }: any) {
   const anioActual = new Date().getFullYear()
-  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // Genera exactamente "2026-05-25"
+  const hoyFormateado = new Date().toLocaleDateString('sv-SE') // "2026-05-25"
 
   const [fechaInicio, setFechaInicio] = useState(hoyFormateado)
   const [fechaFin, setFechaFin] = useState(hoyFormateado)
@@ -27,7 +27,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     }
   }
 
-  // EFECTO DE CONSULTA CORREGIDO: Formato de filtros nativos para Supabase
+  // Consulta limpia a Supabase por Rangos de año o mes
   useEffect(() => {
     const consultarBaseDeDatos = async () => {
       if (!supabase || (modo !== 'anual' && modo !== 'mensual')) {
@@ -42,10 +42,8 @@ export default function Balance({ ventas, gastos, supabase }: any) {
         let queryGastos = supabase.from('gastos').select('*')
 
         if (modo === 'anual') {
-          // Buscamos de forma limpia usando rangos estándar de inicio y fin de año
           const inicioAnio = `${anioActual}-01-01T00:00:00.000Z`
           const finAnio = `${anioActual}-12-31T23:59:59.999Z`
-          
           queryVentas = queryVentas.gte('creado_at', inicioAnio).lte('creado_at', finAnio)
           queryGastos = queryGastos.gte('created_at', inicioAnio).lte('created_at', finAnio)
         } else if (modo === 'mensual') {
@@ -83,11 +81,11 @@ export default function Balance({ ventas, gastos, supabase }: any) {
     return ventasActivas?.filter((v: any) => v.estado !== 'anulado') || [];
   }, [ventasActivas]);
 
+  // Procesamos la lógica base del balance
   const data = useMemo(() => {
     let fInicio = fechaInicio
     let fFin = fechaFin
 
-    // LÍNEA ARREGLADA: Removido el espacio y la coma fantasma que rompían la compilación
     if (modo === 'semanal') {
       const fechaRef = new Date(fechaInicio + 'T00:00:00')
       const diaSemana = fechaRef.getDay()
@@ -111,6 +109,68 @@ export default function Balance({ ventas, gastos, supabase }: any) {
 
     return calcularBalance(ventasValidas, gastosActivos, modo, fInicio, fFin, tipoFiltro);
   }, [ventasValidas, gastosActivos, modo, fechaInicio, fechaFin, tipoFiltro, anioActual]);
+
+  // SOLUCIÓN AL CONFLICTO: Re-calculamos y unificamos la lista de días para que NUNCA se salte ningún día de ningún mes
+  const listaDiasCorregida = useMemo(() => {
+    if (modo !== 'anual' && modo !== 'mensual') return data.listaDias;
+
+    const mapeoDias: { [key: string]: { fecha: string; ingresos: number; egresos: number; balanceNeto: number } } = {};
+
+    // 1. Agrupar todas las ventas reales por su día correspondiente
+    ventasValidas.forEach((v: any) => {
+      const fechaRaw = v.creado_at || v.created_at;
+      if (!fechaRaw) return;
+      
+      // Extraemos la fecha limpia en formato DD/MM/YYYY
+      const fechaObj = new Date(fechaRaw);
+      const dia = String(fechaObj.getDate()).padStart(2, '0');
+      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+      const anio = fechaObj.getFullYear();
+      const fechaClave = `${dia}/${mes}/${anio}`;
+
+      // Si la fecha contiene caracteres extraños o es inválida, usamos el formato que venga por texto
+      const fechaFinal = isNaN(fechaObj.getTime()) ? String(fechaRaw).split('T')[0] : fechaClave;
+
+      const monto = Number(v.total || v.monto || 0);
+
+      if (!mapeoDias[fechaFinal]) {
+        mapeoDias[fechaFinal] = { fecha: fechaFinal, ingresos: 0, egresos: 0, balanceNeto: 0 };
+      }
+      mapeoDias[fechaFinal].ingresos += monto;
+    });
+
+    // 2. Agrupar todos los gastos reales por su día correspondiente
+    gastosActivos.forEach((g: any) => {
+      const fechaRaw = g.created_at || g.creado_at;
+      if (!fechaRaw) return;
+
+      const fechaObj = new Date(fechaRaw);
+      const dia = String(fechaObj.getDate()).padStart(2, '0');
+      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+      const anio = fechaObj.getFullYear();
+      const fechaClave = `${dia}/${mes}/${anio}`;
+
+      const fechaFinal = isNaN(fechaObj.getTime()) ? String(fechaRaw).split('T')[0] : fechaClave;
+      const monto = Number(g.monto || 0);
+
+      if (!mapeoDias[fechaFinal]) {
+        mapeoDias[fechaFinal] = { fecha: fechaFinal, ingresos: 0, egresos: 0, balanceNeto: 0 };
+      }
+      mapeoDias[fechaFinal].egresos += monto;
+    });
+
+    // 3. Convertir el mapa a un arreglo, calcular el balance neto y ordenarlo de más reciente a más antiguo
+    return Object.values(mapeoDias)
+      .map((d) => ({
+        ...d,
+        balanceNeto: d.ingresos - d.egresos
+      }))
+      .sort((a, b) => {
+        const [diaA, mesA, anioA] = a.fecha.split('/').map(Number);
+        const [diaB, mesB, anioB] = b.fecha.split('/').map(Number);
+        return new Date(anioB, mesB - 1, diaB).getTime() - new Date(anioA, mesA - 1, diaA).getTime();
+      });
+  }, [ventasValidas, gastosActivos, modo, data.listaDias]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-10 print:p-12 print:max-w-full print:space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -164,7 +224,7 @@ export default function Balance({ ventas, gastos, supabase }: any) {
 
       {cargandoHistorico && (
         <div className="mx-2 p-4 bg-blue-50 text-blue-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-wider animate-pulse border border-blue-100">
-          🔄 Cargando el histórico completo desde la base de datos...
+          🔄 Estructurando el historial consolidado del año...
         </div>
       )}
 
@@ -195,8 +255,9 @@ export default function Balance({ ventas, gastos, supabase }: any) {
         />
       )}
 
+      {/* AQUÍ PASAMOS LA LISTA TOTALMENTE RECONSTRUIDA Y ORDENADA */}
       <div className="mx-2 print:mx-0">
-        <TablaGananciasPorDia listaDias={data.listaDias} tipoFiltro={tipoFiltro} />
+        <TablaGananciasPorDia listaDias={listaDiasCorregida} tipoFiltro={tipoFiltro} />
       </div>
 
       <div className="mx-2 bg-white p-8 rounded-[3rem] shadow-sm border border-gray-50 print:hidden">
