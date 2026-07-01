@@ -91,7 +91,7 @@ export const getReporteHTML = (fecha: string, nombreCajero: string, data: any) =
 
           <div class="stats-grid">
             <div class="stat-box"><small>Efectivo</small><p>Bs ${metodos.ef.toFixed(2)}</p></div> 
-            <div class="stat-box"><small>QR / Transf.</small><p>Bs ${metodos.qr.toFixed(2)}</p></div> 
+            <div class="stat-box"><small>QR / Transf.</small><p>Bs ${metodos.qr-metodos.pya.toFixed(2)}</p></div>
             <div class="stat-box"><small>PedidosYa</small><p>Bs ${metodos.pya.toFixed(2)}</p></div> 
           </div>
 
