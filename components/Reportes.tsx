@@ -81,7 +81,7 @@ export default function Reportes({ ventas, gastos, productos = [] }: { ventas: a
         />
         <StatCard 
           label="QR / Transf." 
-          valor={metodos.qr} 
+          valor={metodos.qr-metodos.pya} 
           color="blue" 
           sub="En Banco" 
           onClick={() => setModalInfo({ open: true, tipo: 'qr', titulo: 'Desglose de QR' })}
