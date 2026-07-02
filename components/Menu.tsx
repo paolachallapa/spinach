@@ -51,7 +51,8 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
 
       const datosFinales = await ejecutarRegistroDB(metodoPago, montosParaDB);
       
-      if (datosFinales) {
+      if (datosFinales) { 
+        try{
         await printer.imprimirTicket(
           datosFinales.cliente, 
           datosFinales.carrito, 
@@ -61,11 +62,17 @@ export default function Menu({ productos, ventas, alTerminar, perfilUsuario }: a
           datosFinales.metodo,
           metodoPago === 'mix' ? pagosMix : null
         );
-          
+        } catch (printError) {
+          console.error("Error en la ticketera, pero continuaremos con el flujo:", printError);
+        }  
         setMontoRecibido(0);
         setPagosMix({ ef: 0, qr: 0 });
         setMetodoPago('ef');
+        
         finalizarLimpiarTodo();
+         if (typeof alTerminar === 'function') {
+          await alTerminar();
+        }
       }
     } catch (error) {
       console.error("Error al registrar:", error);
